@@ -1,0 +1,245 @@
+📁 MÉDIA-SCAN - Structure du Projet
+================================================================================
+
+django_back/
+│
+├── 📂 database/                    # Gestion de la base de données SQLite
+│   ├── __init__.py                # Module database
+│   ├── models.py                  # Modèles Article et Media (dataclasses)
+│   ├── schema.sql                 # Schéma SQLite (tables, index)
+│   └── db_manager.py              # Gestionnaire CRUD + statistiques
+│
+├── 📂 scrapers/                    # Système de scraping intelligent
+│   ├── __init__.py                # Module scrapers
+│   ├── wordpress_scraper.py       # Scraper WordPress API REST
+│   ├── html_scraper.py            # Scraper HTML générique (fallback)
+│   └── scraper_manager.py         # Orchestrateur avec fallback auto
+│
+├── 📂 utils/                       # Utilitaires
+│   ├── __init__.py                # Module utils
+│   ├── text_utils.py              # Nettoyage texte, extraction mots-clés
+│   └── date_utils.py              # Parsing dates françaises
+│
+├── 📂 data/                        # Données (créé automatiquement)
+│   └── media_scan.db              # Base de données SQLite
+│
+├── 📂 django_back/                 # Configuration Django
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   ├── asgi.py
+│   └── wsgi.py
+│
+├── 📄 sites.txt                    # ⚙️ Configuration des sites à scraper
+├── 📄 run_scraper.py              # 🚀 Script principal de scraping
+├── 📄 test_scraper.py             # 🧪 Tests automatisés
+├── 📄 manage.py                   # Django management
+├── 📄 requirements.txt            # Dépendances Python
+├── 📄 .gitignore                  # Fichiers à ignorer (Git)
+│
+└── 📂 Documentation/
+    ├── README_SCRAPING.md         # 📖 Documentation technique complète
+    ├── GUIDE_UTILISATION.md       # 📘 Guide d'utilisation
+    ├── ARCHITECTURE.md            # 🏗️ Architecture du système
+    ├── QUICKSTART.md              # ⚡ Démarrage rapide (5 min)
+    ├── RESUME_PROJET.md           # 📋 Résumé du projet
+    └── STRUCTURE_PROJET.txt       # 📁 Ce fichier
+
+================================================================================
+
+🎯 FICHIERS PRINCIPAUX
+================================================================================
+
+1. sites.txt
+   └─ Configuration des sites à scraper
+   └─ Format : Une URL par ligne
+   └─ Commentaires supportés (#)
+
+2. run_scraper.py
+   └─ Script principal de scraping
+   └─ Usage : python run_scraper.py [options]
+   └─ Options : --days, --url, --stats
+
+3. test_scraper.py
+   └─ Tests automatisés du système
+   └─ Usage : python test_scraper.py
+   └─ Teste : WordPress, HTML, Database
+
+4. data/media_scan.db
+   └─ Base de données SQLite
+   └─ Tables : medias, articles, scraping_logs
+   └─ Créée automatiquement au premier lancement
+
+================================================================================
+
+🔧 MODULES PYTHON
+================================================================================
+
+database/
+├─ models.py          → Définition des modèles (Article, Media)
+├─ schema.sql         → Schéma SQL (CREATE TABLE, INDEX)
+└─ db_manager.py      → CRUD, statistiques, logs
+
+scrapers/
+├─ wordpress_scraper.py   → Scraping via API REST WordPress
+├─ html_scraper.py        → Scraping HTML générique
+└─ scraper_manager.py     → Orchestration + fallback automatique
+
+utils/
+├─ text_utils.py      → Nettoyage texte, extraction mots-clés
+└─ date_utils.py      → Parsing dates françaises, formatage
+
+================================================================================
+
+📊 BASE DE DONNÉES (SQLite)
+================================================================================
+
+Tables:
+
+1. medias
+   ├─ id (PRIMARY KEY)
+   ├─ nom
+   ├─ url (UNIQUE)
+   ├─ type_site (wordpress, html, unknown)
+   ├─ actif (BOOLEAN)
+   ├─ derniere_collecte (TIMESTAMP)
+   └─ created_at (TIMESTAMP)
+
+2. articles
+   ├─ id (PRIMARY KEY)
+   ├─ media_id (FOREIGN KEY → medias.id)
+   ├─ titre
+   ├─ contenu
+   ├─ extrait
+   ├─ url (UNIQUE)
+   ├─ auteur
+   ├─ date_publication (TIMESTAMP)
+   ├─ image_url
+   ├─ categories (JSON)
+   ├─ tags (JSON)
+   ├─ source_type (wordpress_api, html_scraping)
+   ├─ scraped_at (TIMESTAMP)
+   ├─ vues
+   ├─ commentaires
+   └─ created_at (TIMESTAMP)
+
+3. scraping_logs
+   ├─ id (PRIMARY KEY)
+   ├─ media_id (FOREIGN KEY → medias.id)
+   ├─ status (success, error, partial)
+   ├─ methode (wordpress_api, html_scraping)
+   ├─ articles_collectes
+   ├─ message
+   └─ created_at (TIMESTAMP)
+
+Index:
+├─ idx_articles_media (media_id)
+├─ idx_articles_date (date_publication)
+├─ idx_articles_url (url)
+└─ idx_articles_scraped (scraped_at)
+
+================================================================================
+
+🚀 WORKFLOW DE SCRAPING
+================================================================================
+
+1. Lecture Configuration
+   └─ sites.txt → Liste d'URLs
+
+2. Pour Chaque Site
+   │
+   ├─ Tentative 1: WordPress API
+   │  ├─ Test endpoint /wp-json/wp/v2/
+   │  ├─ Si détecté → Scraping via API
+   │  └─ Données structurées (JSON)
+   │
+   └─ Tentative 2: HTML Scraping (si échec)
+      ├─ Récupération page d'accueil
+      ├─ Détection liens articles
+      ├─ Scraping de chaque article
+      └─ Extraction via sélecteurs CSS
+
+3. Sauvegarde
+   ├─ Vérification doublon (URL)
+   ├─ INSERT OR IGNORE
+   └─ Logging (scraping_logs)
+
+4. Résumé
+   └─ Statistiques de collecte
+
+================================================================================
+
+📚 DOCUMENTATION
+================================================================================
+
+Pour Débutants:
+└─ QUICKSTART.md          → Démarrage en 5 minutes
+
+Pour Utilisateurs:
+└─ GUIDE_UTILISATION.md   → Guide complet d'utilisation
+
+Pour Développeurs:
+├─ README_SCRAPING.md     → Documentation technique détaillée
+└─ ARCHITECTURE.md        → Architecture du système
+
+Vue d'Ensemble:
+├─ RESUME_PROJET.md       → Résumé complet du projet
+└─ STRUCTURE_PROJET.txt   → Ce fichier
+
+================================================================================
+
+🎯 COMMANDES ESSENTIELLES
+================================================================================
+
+# Scraping standard (30 jours)
+python run_scraper.py
+
+# Scraping quotidien (1 jour)
+python run_scraper.py --days 1
+
+# Test d'un site
+python run_scraper.py --url https://lefaso.net
+
+# Statistiques
+python run_scraper.py --stats
+
+# Tests
+python test_scraper.py
+
+# Aide
+python run_scraper.py --help
+
+================================================================================
+
+✅ STATUT DU PROJET
+================================================================================
+
+[✅] Structure de dossiers
+[✅] Base de données SQLite
+[✅] Scraper WordPress API
+[✅] Scraper HTML (fallback)
+[✅] Gestionnaire avec fallback auto
+[✅] Gestion des doublons
+[✅] Logs de scraping
+[✅] Configuration (sites.txt)
+[✅] Script principal
+[✅] Tests automatisés
+[✅] Documentation complète
+
+[⏳] Tests avec sites réels
+[⏳] Automatisation quotidienne
+[⏳] Dashboard de visualisation
+[⏳] Classification ML
+
+================================================================================
+
+🎉 PROJET PRÊT À L'EMPLOI !
+================================================================================
+
+Prochaine étape:
+└─ python run_scraper.py
+
+Documentation:
+└─ Lire QUICKSTART.md pour démarrer en 5 minutes
+
+================================================================================

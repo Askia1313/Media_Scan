@@ -1,0 +1,11 @@
+# Configuration des sites médias à scraper
+# Format: URL du site (un par ligne)
+# Les lignes commençant par # sont des commentaires
+
+# Médias burkinabè principaux
+# https://lefaso.net
+https://www.sidwaya.info
+https://www.lobservateur.bf
+https://www.aib.media
+https://www.burkina24.com
+https://www.lepays.bf
