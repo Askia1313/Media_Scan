@@ -50,6 +50,12 @@ export interface ClassificationStats {
   confiance_moyenne: number;
 }
 
+export interface WeeklyCategoryStats {
+  semaine: string;
+  categorie: string;
+  total: number;
+}
+
 // Facebook
 export interface FacebookPost {
   id: number;

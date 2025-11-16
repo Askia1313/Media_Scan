@@ -425,6 +425,35 @@ class DatabaseManager:
         finally:
             conn.close()
     
+    def get_weekly_category_stats(self, weeks: int = 5) -> List[Dict[str, Any]]:
+        """
+        Statistiques hebdomadaires par catégorie
+        Retourne les données groupées par semaine et par catégorie
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Calculer la date de début (nombre de semaines * 7 jours)
+            date_limit = (datetime.now() - timedelta(weeks=weeks)).isoformat()
+            
+            cursor.execute("""
+                SELECT 
+                    strftime('%Y-%W', a.date_publication) as semaine,
+                    c.categorie,
+                    COUNT(*) as total
+                FROM classifications c
+                JOIN articles a ON c.article_id = a.id
+                WHERE a.date_publication >= ?
+                GROUP BY semaine, c.categorie
+                ORDER BY semaine, c.categorie
+            """, (date_limit,))
+            
+            return [dict(row) for row in cursor.fetchall()]
+        
+        finally:
+            conn.close()
+    
     # ==================== FACEBOOK ====================
     
     def add_facebook_post(self, media_id: int, post_id: str, message: str,

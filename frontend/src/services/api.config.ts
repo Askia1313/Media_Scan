@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
   // Classifications
   CLASSIFICATIONS: '/api/classifications/',
   CLASSIFICATIONS_STATS: '/api/classifications/stats/',
+  CLASSIFICATIONS_WEEKLY: '/api/classifications/weekly/',
   
   // Facebook
   FACEBOOK_POSTS: '/api/facebook/posts/',

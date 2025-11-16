@@ -24,6 +24,7 @@ import {
 import { useStats } from "@/hooks/useStats";
 import { useClassificationStats } from "@/hooks/useClassifications";
 import { useRecentArticles } from "@/hooks/useArticles";
+import { useRanking } from "@/hooks/useRanking";
 
 const DashboardOverview = () => {
   // Use TanStack Query hooks
@@ -34,8 +35,23 @@ const DashboardOverview = () => {
     7,
     1000
   );
+  const { data: ranking, isLoading: rankingLoading } = useRanking(30);
 
-  const loading = statsLoading || classificationLoading || articlesLoading;
+  const loading =
+    statsLoading || classificationLoading || articlesLoading || rankingLoading;
+
+  // Calculate total publications (web + social media)
+  const totalPublications = useMemo(() => {
+    if (!ranking) return 0;
+    return ranking.reduce((total, media) => {
+      return (
+        total +
+        (media.total_articles || 0) +
+        (media.total_posts_facebook || 0) +
+        (media.total_tweets || 0)
+      );
+    }, 0);
+  }, [ranking]);
 
   // Transform classification data for the pie chart
   const themeData = useMemo(() => {
@@ -71,8 +87,12 @@ const DashboardOverview = () => {
         acc[dayName] = { jour: dayName, articles: 0, engagement: 0 };
       }
       acc[dayName].articles++;
-      acc[dayName].engagement +=
-        (article.vues || 0) + (article.commentaires || 0);
+
+      // Ensure engagement values are positive numbers
+      const vues = Math.max(0, article.vues || 0);
+      const commentaires = Math.max(0, article.commentaires || 0);
+      acc[dayName].engagement += vues + commentaires;
+
       return acc;
     }, {});
 
@@ -83,8 +103,8 @@ const DashboardOverview = () => {
 
   const kpiData = [
     {
-      label: "Articles collectés",
-      value: stats?.total_articles?.toLocaleString() || "0",
+      label: "Publications totales",
+      value: totalPublications.toLocaleString(),
       change: "+15%",
       icon: FileText,
       color: "text-primary",

@@ -4,7 +4,7 @@
 
 import { apiClient, ApiResponse } from './api.client';
 import { API_ENDPOINTS } from './api.config';
-import { Classification, ClassificationStats } from './types';
+import { Classification, ClassificationStats, WeeklyCategoryStats } from './types';
 
 export type Category = 
   | 'Politique'
@@ -41,6 +41,16 @@ export const classificationService = {
     return apiClient.get<ClassificationStats[]>(
       API_ENDPOINTS.CLASSIFICATIONS_STATS,
       { days }
+    );
+  },
+
+  /**
+   * Récupérer les statistiques hebdomadaires par catégorie
+   */
+  async getWeeklyStats(weeks = 5): Promise<ApiResponse<WeeklyCategoryStats[]>> {
+    return apiClient.get<WeeklyCategoryStats[]>(
+      API_ENDPOINTS.CLASSIFICATIONS_WEEKLY,
+      { weeks }
     );
   },
 };

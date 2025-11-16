@@ -20,8 +20,8 @@ from .serializers import (
     MediaSerializer, ArticleSerializer, ClassificationSerializer,
     FacebookPostSerializer, TwitterTweetSerializer,
     AudienceWebSerializer, AudienceFacebookSerializer, AudienceTwitterSerializer,
-    AudienceGlobalSerializer, CategoryStatsSerializer, MediaRankingSerializer,
-    ScrapingRequestSerializer, ScrapingResponseSerializer
+    AudienceGlobalSerializer, CategoryStatsSerializer, WeeklyCategoryStatsSerializer,
+    MediaRankingSerializer, ScrapingRequestSerializer, ScrapingResponseSerializer
 )
 
 
@@ -148,6 +148,17 @@ class CategoryStatsView(APIView):
         days = int(request.GET.get('days', 30))
         stats = db.get_category_stats(days=days)
         serializer = CategoryStatsSerializer(stats, many=True)
+        return Response(serializer.data)
+
+
+class WeeklyCategoryStatsView(APIView):
+    """Statistiques hebdomadaires par catégorie"""
+    
+    def get(self, request):
+        """GET /api/classifications/weekly/?weeks=5"""
+        weeks = int(request.GET.get('weeks', 5))
+        stats = db.get_weekly_category_stats(weeks=weeks)
+        serializer = WeeklyCategoryStatsSerializer(stats, many=True)
         return Response(serializer.data)
 
 

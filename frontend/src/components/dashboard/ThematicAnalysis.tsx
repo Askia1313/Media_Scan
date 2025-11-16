@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -28,13 +28,19 @@ import {
   Palette,
   Trophy,
 } from "lucide-react";
-import { classificationService } from "@/services/classification.service";
-import { toast } from "@/hooks/use-toast";
+import {
+  useClassificationStats,
+  useWeeklyClassificationStats,
+} from "@/hooks/useClassifications";
 
 const ThematicAnalysis = () => {
-  const [loading, setLoading] = useState(true);
-  const [themes, setThemes] = useState<any[]>([]);
-  const [weeklyThemes, setWeeklyThemes] = useState<any[]>([]);
+  // Use TanStack Query hooks
+  const { data: classificationData, isLoading: statsLoading } =
+    useClassificationStats(30);
+  const { data: weeklyData, isLoading: weeklyLoading } =
+    useWeeklyClassificationStats(5);
+
+  const loading = statsLoading || weeklyLoading;
 
   const iconMap: Record<string, any> = {
     Politique: Newspaper,
@@ -46,62 +52,61 @@ const ThematicAnalysis = () => {
     Autres: Newspaper,
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Transform classification data
+  const themes = useMemo(() => {
+    if (!classificationData) return [];
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
+    const colors = [
+      "hsl(var(--chart-1))",
+      "hsl(var(--chart-2))",
+      "hsl(var(--chart-3))",
+      "hsl(var(--chart-4))",
+      "hsl(var(--chart-5))",
+      "hsl(210 20% 65%)",
+    ];
 
-      const response = await classificationService.getStats(30);
-      if (response.data && !response.error) {
-        const colors = [
-          "hsl(var(--chart-1))",
-          "hsl(var(--chart-2))",
-          "hsl(var(--chart-3))",
-          "hsl(var(--chart-4))",
-          "hsl(var(--chart-5))",
-          "hsl(210 20% 65%)",
-        ];
+    const total = classificationData.reduce((sum, item) => sum + item.total, 0);
 
-        const total = response.data.reduce((sum, item) => sum + item.total, 0);
+    return classificationData.map((item, index) => ({
+      name: item.categorie,
+      icon: iconMap[item.categorie] || Newspaper,
+      articles: item.total,
+      percentage: total > 0 ? ((item.total / total) * 100).toFixed(1) : 0,
+      color: colors[index % colors.length],
+      trend: "+" + Math.floor(Math.random() * 15 + 1) + "%",
+    }));
+  }, [classificationData]);
 
-        const themesData = response.data.map((item, index) => ({
-          name: item.categorie,
-          icon: iconMap[item.categorie] || Newspaper,
-          articles: item.total,
-          percentage: total > 0 ? ((item.total / total) * 100).toFixed(1) : 0,
-          color: colors[index % colors.length],
-          trend: "+" + Math.floor(Math.random() * 15 + 1) + "%",
-        }));
+  // Transform weekly data from API
+  const weeklyThemes = useMemo(() => {
+    if (!weeklyData || themes.length === 0) return [];
 
-        setThemes(themesData);
+    // Group data by week
+    const weekMap = new Map<string, any>();
 
-        // Générer des données hebdomadaires simulées basées sur les totaux
-        const weekly = [];
-        for (let i = 1; i <= 5; i++) {
-          const weekData: any = { semaine: `S${i}` };
-          themesData.forEach((theme) => {
-            weekData[theme.name] = Math.floor(
-              theme.articles / 5 + (Math.random() * 100 - 50)
-            );
-          });
-          weekly.push(weekData);
-        }
-        setWeeklyThemes(weekly);
+    weeklyData.forEach((item) => {
+      if (!weekMap.has(item.semaine)) {
+        weekMap.set(item.semaine, { semaine: item.semaine });
+        // Initialize all categories to 0
+        themes.forEach((theme) => {
+          weekMap.get(item.semaine)![theme.name] = 0;
+        });
       }
-    } catch (error) {
-      console.error("Erreur lors du chargement des thématiques:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger l'analyse thématique",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Set the actual value for this category
+      weekMap.get(item.semaine)![item.categorie] = item.total;
+    });
+
+    // Convert to array and sort by week
+    const weeks = Array.from(weekMap.values()).sort((a, b) =>
+      a.semaine.localeCompare(b.semaine)
+    );
+
+    // Label weeks as S1, S2, etc.
+    return weeks.map((week, index) => ({
+      ...week,
+      semaine: `S${index + 1}`,
+    }));
+  }, [weeklyData, themes]);
 
   if (loading) {
     return (

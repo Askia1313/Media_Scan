@@ -158,6 +158,13 @@ class CategoryStatsSerializer(serializers.Serializer):
     confiance_moyenne = serializers.FloatField()
 
 
+class WeeklyCategoryStatsSerializer(serializers.Serializer):
+    """Serializer pour les statistiques hebdomadaires par catégorie"""
+    semaine = serializers.CharField()
+    categorie = serializers.CharField()
+    total = serializers.IntegerField()
+
+
 class MediaRankingSerializer(serializers.Serializer):
     """Serializer pour le classement des médias"""
     id = serializers.IntegerField()

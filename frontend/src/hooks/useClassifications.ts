@@ -38,3 +38,20 @@ export const useClassificationStats = (days = 30) => {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
+
+/**
+ * Hook to fetch weekly classification statistics
+ */
+export const useWeeklyClassificationStats = (weeks = 5) => {
+  return useQuery({
+    queryKey: ['classifications', 'weekly', weeks],
+    queryFn: async () => {
+      const response = await classificationService.getWeeklyStats(weeks);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};

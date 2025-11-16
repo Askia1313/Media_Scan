@@ -9,7 +9,7 @@ from .views import (
     # Articles
     ArticleListView,
     # Classifications
-    ClassificationListView, CategoryStatsView,
+    ClassificationListView, CategoryStatsView, WeeklyCategoryStatsView,
     # Facebook
     FacebookPostListView,
     # Twitter
@@ -39,6 +39,7 @@ urlpatterns = [
     # Classifications
     path('classifications/', ClassificationListView.as_view(), name='classification-list'),
     path('classifications/stats/', CategoryStatsView.as_view(), name='category-stats'),
+    path('classifications/weekly/', WeeklyCategoryStatsView.as_view(), name='weekly-category-stats'),
     
     # Facebook
     path('facebook/posts/', FacebookPostListView.as_view(), name='facebook-posts'),
