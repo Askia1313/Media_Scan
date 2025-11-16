@@ -1,20 +1,50 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Globe, Facebook, Twitter } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { toast } from "@/hooks/use-toast";
+import { mediaService } from "@/services/media.service";
 
 const mediaSchema = z.object({
-  name: z.string().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
+  name: z
+    .string()
+    .min(2, "Le nom doit contenir au moins 2 caractères")
+    .max(100),
   type: z.enum(["web", "facebook", "twitter"], {
     required_error: "Veuillez sélectionner un type",
   }),
@@ -32,29 +62,52 @@ interface Media {
 }
 
 const MediaManagement = () => {
-  const [medias, setMedias] = useState<Media[]>([
-    {
-      id: "1",
-      name: "Lefaso.net",
-      type: "web",
-      url: "https://lefaso.net",
-      addedAt: "2024-01-15",
-    },
-    {
-      id: "2",
-      name: "FasoPresse",
-      type: "facebook",
-      url: "fasopresse",
-      addedAt: "2024-01-20",
-    },
-    {
-      id: "3",
-      name: "Sidwaya",
-      type: "twitter",
-      url: "@sidwaya",
-      addedAt: "2024-02-01",
-    },
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [medias, setMedias] = useState<Media[]>([]);
+
+  useEffect(() => {
+    loadMedias();
+  }, []);
+
+  const loadMedias = async () => {
+    try {
+      setLoading(true);
+      const response = await mediaService.getAll();
+      if (response.data && !response.error) {
+        // Transformer les données de l'API au format attendu
+        const transformedMedias = response.data.map((media) => {
+          let type: "web" | "facebook" | "twitter" = "web";
+          let url = media.url;
+
+          if (media.facebook_page) {
+            type = "facebook";
+            url = media.facebook_page;
+          } else if (media.twitter_account) {
+            type = "twitter";
+            url = media.twitter_account;
+          }
+
+          return {
+            id: media.id.toString(),
+            name: media.nom,
+            type,
+            url,
+            addedAt: new Date(media.created_at).toISOString().split("T")[0],
+          };
+        });
+        setMedias(transformedMedias);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des médias:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger la liste des médias",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const form = useForm<MediaFormData>({
     resolver: zodResolver(mediaSchema),
@@ -76,7 +129,7 @@ const MediaManagement = () => {
 
     setMedias([...medias, newMedia]);
     form.reset();
-    
+
     toast({
       title: "Média ajouté",
       description: `${data.name} a été ajouté à la liste de surveillance.`,
@@ -84,9 +137,9 @@ const MediaManagement = () => {
   };
 
   const handleDelete = (id: string) => {
-    const media = medias.find(m => m.id === id);
-    setMedias(medias.filter(m => m.id !== id));
-    
+    const media = medias.find((m) => m.id === id);
+    setMedias(medias.filter((m) => m.id !== id));
+
     toast({
       title: "Média supprimé",
       description: `${media?.name} a été retiré de la surveillance.`,
@@ -119,6 +172,17 @@ const MediaManagement = () => {
         return type;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Chargement des médias...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -157,7 +221,10 @@ const MediaManagement = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Sélectionner le type" />
@@ -196,15 +263,15 @@ const MediaManagement = () => {
                     <FormItem>
                       <FormLabel>URL / Nom d'utilisateur</FormLabel>
                       <FormControl>
-                        <Input 
+                        <Input
                           placeholder={
-                            form.watch("type") === "web" 
-                              ? "https://exemple.com" 
+                            form.watch("type") === "web"
+                              ? "https://exemple.com"
                               : form.watch("type") === "twitter"
                               ? "@username"
                               : "username"
                           }
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -244,8 +311,12 @@ const MediaManagement = () => {
             <TableBody>
               {medias.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Aucun média ajouté. Utilisez le formulaire ci-dessus pour en ajouter.
+                  <TableCell
+                    colSpan={5}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    Aucun média ajouté. Utilisez le formulaire ci-dessus pour en
+                    ajouter.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -261,7 +332,9 @@ const MediaManagement = () => {
                     <TableCell className="font-mono text-sm text-muted-foreground">
                       {media.url}
                     </TableCell>
-                    <TableCell>{new Date(media.addedAt).toLocaleDateString('fr-FR')}</TableCell>
+                    <TableCell>
+                      {new Date(media.addedAt).toLocaleDateString("fr-FR")}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
