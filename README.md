@@ -1,4 +1,4 @@
-# MÉDIA-SCAN - Système Intelligent d'Observation des Médias
+# ÉDIA-SCAN - Système Intelligent d'Observation des Médias
 
 > Plateforme d'intelligence artificielle pour la surveillance et l'analyse automatique des médias burkinabè
 

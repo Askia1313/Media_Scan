@@ -1,5 +1,6 @@
 """
 Gestionnaire principal de scraping avec fallback automatique
+Priorité: RSS > HTML Scraping
 """
 
 from typing import List, Tuple
@@ -7,11 +8,12 @@ from urllib.parse import urlparse
 
 from database.db_manager import DatabaseManager
 from database.models import Article
+from .rss_scraper import RSScraper
 from .smart_html_scraper import SmartHTMLScraper
 
 
 class ScraperManager:
-    """Gestionnaire de scraping HTML intelligent"""
+    """Gestionnaire de scraping intelligent avec RSS et HTML"""
     
     def __init__(self, db_manager: DatabaseManager):
         """
@@ -24,7 +26,7 @@ class ScraperManager:
     
     def scrape_site(self, url: str, days: int = 30) -> Tuple[int, str, str]:
         """
-        Scraper un site avec le scraper HTML intelligent
+        Scraper un site avec RSS en priorité, sinon HTML
         
         Args:
             url: URL du site à scraper
@@ -45,7 +47,39 @@ class ScraperManager:
         print(f"{'='*60}\n")
         
         try:
-            # Utiliser le scraper HTML intelligent
+            # Essayer d'abord avec RSS
+            print(f"🔄 Tentative 1/2: Scraping RSS...")
+            rss_scraper = RSScraper(url)
+            articles = rss_scraper.scrape(media_id=0, days=days)  # media_id temporaire
+            
+            # Si RSS a fonctionné
+            if len(articles) > 0:
+                # Ajouter ou récupérer le média
+                media_id = self.db.add_media(media_name, url)
+                
+                # Mettre à jour les media_id
+                for article in articles:
+                    article.media_id = media_id
+                
+                # Sauvegarder
+                saved_count = self._save_articles(articles)
+                
+                # Mettre à jour la date de dernière collecte
+                self.db.update_media_last_scrape(media_id)
+                
+                # Logger
+                self.db.add_scraping_log(
+                    media_id=media_id,
+                    status='success',
+                    methode='rss_feed',
+                    articles_collectes=saved_count,
+                    message=f"{saved_count} articles collectés via RSS"
+                )
+                
+                return saved_count, 'rss_feed', f"✅ {saved_count} articles collectés via RSS"
+            
+            # Si RSS n'a pas fonctionné, fallback vers HTML
+            print(f"\n🔄 Tentative 2/2: Scraping HTML...")
             scraper = SmartHTMLScraper(url)
             
             # Ajouter/mettre à jour le média
