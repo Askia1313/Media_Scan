@@ -790,6 +790,205 @@ class DatabaseManager:
         finally:
             conn.close()
     
+    # ==================== CONTENT MODERATION ====================
+    
+    def add_content_moderation(self, content_type: str, content_id: int, analysis: dict) -> int:
+        """
+        Ajoute ou met à jour une analyse de modération
+        
+        Args:
+            content_type: Type de contenu ('article', 'facebook_post', 'tweet')
+            content_id: ID du contenu
+            analysis: Résultat de l'analyse
+            
+        Returns:
+            ID de l'analyse
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            import json
+            
+            toxicity = analysis.get('toxicity', {})
+            misinformation = analysis.get('misinformation', {})
+            sensitivity = analysis.get('sensitivity', {})
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO content_moderation (
+                    content_type, content_id,
+                    risk_score, risk_level, should_flag,
+                    is_toxic, toxicity_score, hate_speech_score, violence_score, 
+                    insults_score, discrimination_score, toxicity_reason,
+                    is_misinformation, misinformation_score, unverified_claims_score,
+                    fact_manipulation_score, conspiracy_score, propaganda_score,
+                    suspicious_elements, misinformation_reason,
+                    is_sensitive, sensitivity_level, sensitivity_score,
+                    sensitive_categories, sensitivity_reason,
+                    analyzed_at, model_used
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                content_type, content_id,
+                analysis.get('risk_score', 0),
+                analysis.get('risk_level', 'MINIMAL'),
+                1 if analysis.get('should_flag', False) else 0,
+                1 if toxicity.get('est_toxique', False) else 0,
+                toxicity.get('score_toxicite', 0),
+                toxicity.get('incitation_haine', 0),
+                toxicity.get('violence', 0),
+                toxicity.get('insultes', 0),
+                toxicity.get('discrimination', 0),
+                toxicity.get('raison', ''),
+                1 if misinformation.get('est_desinformation', False) else 0,
+                misinformation.get('score_desinformation', 0),
+                misinformation.get('affirmations_non_verifiees', 0),
+                misinformation.get('manipulation_faits', 0),
+                misinformation.get('theorie_complot', 0),
+                misinformation.get('propagande', 0),
+                json.dumps(misinformation.get('elements_suspects', [])),
+                misinformation.get('raison', ''),
+                1 if sensitivity.get('est_sensible', False) else 0,
+                sensitivity.get('niveau_sensibilite', 'faible'),
+                sensitivity.get('score_sensibilite', 0),
+                json.dumps(sensitivity.get('categories_sensibles', [])),
+                sensitivity.get('raison', ''),
+                analysis.get('analyzed_at'),
+                'llama3.2'
+            ))
+            
+            conn.commit()
+            return cursor.lastrowid
+            
+        finally:
+            conn.close()
+    
+    def get_content_moderation(self, content_type: str, content_id: int) -> Optional[dict]:
+        """
+        Récupère l'analyse de modération d'un contenu
+        
+        Args:
+            content_type: Type de contenu
+            content_id: ID du contenu
+            
+        Returns:
+            Dict avec l'analyse ou None
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT * FROM content_moderation
+                WHERE content_type = ? AND content_id = ?
+            """, (content_type, content_id))
+            
+            row = cursor.fetchone()
+            if row:
+                import json
+                return {
+                    'id': row['id'],
+                    'content_type': row['content_type'],
+                    'content_id': row['content_id'],
+                    'risk_score': row['risk_score'],
+                    'risk_level': row['risk_level'],
+                    'should_flag': bool(row['should_flag']),
+                    'is_toxic': bool(row['is_toxic']),
+                    'toxicity_score': row['toxicity_score'],
+                    'is_misinformation': bool(row['is_misinformation']),
+                    'misinformation_score': row['misinformation_score'],
+                    'is_sensitive': bool(row['is_sensitive']),
+                    'sensitivity_score': row['sensitivity_score'],
+                    'analyzed_at': row['analyzed_at']
+                }
+            return None
+            
+        finally:
+            conn.close()
+    
+    def get_flagged_contents(self, content_type: Optional[str] = None, limit: int = 100) -> List[dict]:
+        """
+        Récupère les contenus signalés
+        
+        Args:
+            content_type: Type de contenu à filtrer (optionnel)
+            limit: Nombre maximum de résultats
+            
+        Returns:
+            Liste des contenus signalés
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            if content_type:
+                cursor.execute("""
+                    SELECT * FROM content_moderation
+                    WHERE should_flag = 1 AND content_type = ?
+                    ORDER BY risk_score DESC
+                    LIMIT ?
+                """, (content_type, limit))
+            else:
+                cursor.execute("""
+                    SELECT * FROM content_moderation
+                    WHERE should_flag = 1
+                    ORDER BY risk_score DESC
+                    LIMIT ?
+                """, (limit,))
+            
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    'id': row['id'],
+                    'content_type': row['content_type'],
+                    'content_id': row['content_id'],
+                    'risk_score': row['risk_score'],
+                    'risk_level': row['risk_level'],
+                    'is_toxic': bool(row['is_toxic']),
+                    'is_misinformation': bool(row['is_misinformation']),
+                    'is_sensitive': bool(row['is_sensitive']),
+                    'analyzed_at': row['analyzed_at']
+                })
+            
+            return results
+            
+        finally:
+            conn.close()
+    
+    def get_moderation_stats(self) -> dict:
+        """
+        Récupère les statistiques de modération
+        
+        Returns:
+            Dict avec les statistiques
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_analyzed,
+                    SUM(CASE WHEN should_flag = 1 THEN 1 ELSE 0 END) as total_flagged,
+                    SUM(CASE WHEN is_toxic = 1 THEN 1 ELSE 0 END) as total_toxic,
+                    SUM(CASE WHEN is_misinformation = 1 THEN 1 ELSE 0 END) as total_misinfo,
+                    SUM(CASE WHEN is_sensitive = 1 THEN 1 ELSE 0 END) as total_sensitive,
+                    AVG(risk_score) as avg_risk_score
+                FROM content_moderation
+            """)
+            
+            row = cursor.fetchone()
+            return {
+                'total_analyzed': row['total_analyzed'] or 0,
+                'total_flagged': row['total_flagged'] or 0,
+                'total_toxic': row['total_toxic'] or 0,
+                'total_misinformation': row['total_misinfo'] or 0,
+                'total_sensitive': row['total_sensitive'] or 0,
+                'avg_risk_score': round(row['avg_risk_score'] or 0, 2)
+            }
+            
+        finally:
+            conn.close()
+    
     # ==================== UTILITAIRES ====================
     
     def vacuum(self):

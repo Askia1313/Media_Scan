@@ -1,0 +1,383 @@
+"""
+Module de détection de contenus sensibles avec Ollama
+Détecte : incitation à la haine, fake news, discours toxique
+"""
+
+import requests
+import json
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+
+
+class ContentModerator:
+    """
+    Analyseur de contenus sensibles utilisant Ollama
+    """
+    
+    def __init__(self, ollama_url: str = "http://localhost:11434", model: str = "mistral:latest"):
+        """
+        Initialise le modérateur de contenu
+        
+        Args:
+            ollama_url: URL de l'API Ollama
+            model: Modèle Ollama à utiliser
+        """
+        self.ollama_url = ollama_url
+        self.model = model
+        self.api_endpoint = f"{ollama_url}/api/generate"
+    
+    def _call_ollama(self, prompt: str, max_tokens: int = 500) -> str:
+        """
+        Appelle l'API Ollama
+        
+        Args:
+            prompt: Le prompt à envoyer
+            max_tokens: Nombre maximum de tokens
+            
+        Returns:
+            Réponse du modèle
+        """
+        try:
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,  # Faible température pour plus de cohérence
+                    "num_predict": max_tokens
+                }
+            }
+            
+            response = requests.post(
+                self.api_endpoint,
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('response', '').strip()
+            else:
+                print(f"❌ Erreur Ollama: {response.status_code}")
+                return ""
+                
+        except Exception as e:
+            print(f"❌ Erreur lors de l'appel à Ollama: {e}")
+            return ""
+    
+    def analyze_toxicity(self, text: str) -> Dict:
+        """
+        Analyse la toxicité d'un contenu
+        
+        Args:
+            text: Texte à analyser
+            
+        Returns:
+            Dict avec score de toxicité et détails
+        """
+        prompt = f"""Analyse ce texte et détermine s'il contient du contenu toxique.
+
+Texte: "{text}"
+
+Évalue les critères suivants (note de 0 à 10):
+1. Incitation à la haine (contre un groupe ethnique, religieux, etc.)
+2. Discours violent ou agressif
+3. Insultes ou langage offensant
+4. Discrimination
+
+Réponds UNIQUEMENT au format JSON suivant:
+{{
+    "est_toxique": true/false,
+    "score_toxicite": 0-10,
+    "incitation_haine": 0-10,
+    "violence": 0-10,
+    "insultes": 0-10,
+    "discrimination": 0-10,
+    "raison": "explication brève"
+}}"""
+
+        response = self._call_ollama(prompt)
+        
+        try:
+            # Extraire le JSON de la réponse
+            json_start = response.find('{')
+            json_end = response.rfind('}') + 1
+            if json_start != -1 and json_end > json_start:
+                json_str = response[json_start:json_end]
+                result = json.loads(json_str)
+                return result
+            else:
+                return self._default_toxicity_result()
+        except json.JSONDecodeError:
+            print(f"⚠️ Impossible de parser la réponse JSON: {response}")
+            return self._default_toxicity_result()
+    
+    def analyze_misinformation(self, text: str) -> Dict:
+        """
+        Analyse si le contenu contient de la désinformation
+        
+        Args:
+            text: Texte à analyser
+            
+        Returns:
+            Dict avec score de désinformation et détails
+        """
+        prompt = f"""Analyse ce texte et détermine s'il contient de la désinformation ou des fake news.
+
+Texte: "{text}"
+
+Évalue les critères suivants (note de 0 à 10):
+1. Affirmations non vérifiées ou fausses
+2. Manipulation de faits
+3. Théories du complot
+4. Propagande
+
+Réponds UNIQUEMENT au format JSON suivant:
+{{
+    "est_desinformation": true/false,
+    "score_desinformation": 0-10,
+    "affirmations_non_verifiees": 0-10,
+    "manipulation_faits": 0-10,
+    "theorie_complot": 0-10,
+    "propagande": 0-10,
+    "raison": "explication brève",
+    "elements_suspects": ["élément1", "élément2"]
+}}"""
+
+        response = self._call_ollama(prompt)
+        
+        try:
+            json_start = response.find('{')
+            json_end = response.rfind('}') + 1
+            if json_start != -1 and json_end > json_start:
+                json_str = response[json_start:json_end]
+                result = json.loads(json_str)
+                return result
+            else:
+                return self._default_misinformation_result()
+        except json.JSONDecodeError:
+            print(f"⚠️ Impossible de parser la réponse JSON: {response}")
+            return self._default_misinformation_result()
+    
+    def analyze_sensitivity(self, text: str) -> Dict:
+        """
+        Analyse la sensibilité globale du contenu
+        
+        Args:
+            text: Texte à analyser
+            
+        Returns:
+            Dict avec niveau de sensibilité et catégories
+        """
+        prompt = f"""Analyse ce texte et détermine son niveau de sensibilité.
+
+Texte: "{text}"
+
+Évalue si le contenu aborde des sujets sensibles:
+1. Violence ou conflit armé
+2. Terrorisme
+3. Politique controversée
+4. Religion sensible
+5. Santé publique (épidémies, etc.)
+
+Réponds UNIQUEMENT au format JSON suivant:
+{{
+    "est_sensible": true/false,
+    "niveau_sensibilite": "faible/moyen/élevé/critique",
+    "score_sensibilite": 0-10,
+    "categories_sensibles": ["catégorie1", "catégorie2"],
+    "raison": "explication brève"
+}}"""
+
+        response = self._call_ollama(prompt)
+        
+        try:
+            json_start = response.find('{')
+            json_end = response.rfind('}') + 1
+            if json_start != -1 and json_end > json_start:
+                json_str = response[json_start:json_end]
+                result = json.loads(json_str)
+                return result
+            else:
+                return self._default_sensitivity_result()
+        except json.JSONDecodeError:
+            print(f"⚠️ Impossible de parser la réponse JSON: {response}")
+            return self._default_sensitivity_result()
+    
+    def analyze_content(self, text: str, content_type: str = "article") -> Dict:
+        """
+        Analyse complète d'un contenu
+        
+        Args:
+            text: Texte à analyser
+            content_type: Type de contenu (article, facebook_post, tweet)
+            
+        Returns:
+            Dict avec toutes les analyses
+        """
+        if not text or len(text.strip()) < 10:
+            return self._default_analysis_result()
+        
+        print(f"🔍 Analyse du contenu ({content_type})...")
+        
+        # Limiter la taille du texte pour l'analyse
+        text_sample = text[:2000] if len(text) > 2000 else text
+        
+        # Analyses parallèles
+        toxicity = self.analyze_toxicity(text_sample)
+        misinformation = self.analyze_misinformation(text_sample)
+        sensitivity = self.analyze_sensitivity(text_sample)
+        
+        # Calcul du score de risque global
+        risk_score = self._calculate_risk_score(toxicity, misinformation, sensitivity)
+        
+        # Déterminer le niveau de risque
+        risk_level = self._determine_risk_level(risk_score)
+        
+        # Déterminer si le contenu doit être signalé
+        should_flag = risk_score >= 6.0
+        
+        return {
+            'content_type': content_type,
+            'analyzed_at': datetime.now().isoformat(),
+            'toxicity': toxicity,
+            'misinformation': misinformation,
+            'sensitivity': sensitivity,
+            'risk_score': round(risk_score, 2),
+            'risk_level': risk_level,
+            'should_flag': should_flag,
+            'text_length': len(text)
+        }
+    
+    def _calculate_risk_score(self, toxicity: Dict, misinformation: Dict, sensitivity: Dict) -> float:
+        """
+        Calcule le score de risque global
+        
+        Args:
+            toxicity: Résultat de l'analyse de toxicité
+            misinformation: Résultat de l'analyse de désinformation
+            sensitivity: Résultat de l'analyse de sensibilité
+            
+        Returns:
+            Score de risque (0-10)
+        """
+        # Pondération: toxicité 40%, désinformation 40%, sensibilité 20%
+        toxicity_score = toxicity.get('score_toxicite', 0)
+        misinfo_score = misinformation.get('score_desinformation', 0)
+        sensitivity_score = sensitivity.get('score_sensibilite', 0)
+        
+        risk_score = (
+            toxicity_score * 0.4 +
+            misinfo_score * 0.4 +
+            sensitivity_score * 0.2
+        )
+        
+        return risk_score
+    
+    def _determine_risk_level(self, risk_score: float) -> str:
+        """
+        Détermine le niveau de risque
+        
+        Args:
+            risk_score: Score de risque (0-10)
+            
+        Returns:
+            Niveau de risque
+        """
+        if risk_score >= 8:
+            return "🔴 CRITIQUE"
+        elif risk_score >= 6:
+            return "🟠 ÉLEVÉ"
+        elif risk_score >= 4:
+            return "🟡 MOYEN"
+        elif risk_score >= 2:
+            return "🟢 FAIBLE"
+        else:
+            return "✅ MINIMAL"
+    
+    def _default_toxicity_result(self) -> Dict:
+        """Résultat par défaut pour l'analyse de toxicité"""
+        return {
+            'est_toxique': False,
+            'score_toxicite': 0,
+            'incitation_haine': 0,
+            'violence': 0,
+            'insultes': 0,
+            'discrimination': 0,
+            'raison': 'Analyse non disponible'
+        }
+    
+    def _default_misinformation_result(self) -> Dict:
+        """Résultat par défaut pour l'analyse de désinformation"""
+        return {
+            'est_desinformation': False,
+            'score_desinformation': 0,
+            'affirmations_non_verifiees': 0,
+            'manipulation_faits': 0,
+            'theorie_complot': 0,
+            'propagande': 0,
+            'raison': 'Analyse non disponible',
+            'elements_suspects': []
+        }
+    
+    def _default_sensitivity_result(self) -> Dict:
+        """Résultat par défaut pour l'analyse de sensibilité"""
+        return {
+            'est_sensible': False,
+            'niveau_sensibilite': 'faible',
+            'score_sensibilite': 0,
+            'categories_sensibles': [],
+            'raison': 'Analyse non disponible'
+        }
+    
+    def _default_analysis_result(self) -> Dict:
+        """Résultat par défaut pour une analyse complète"""
+        return {
+            'content_type': 'unknown',
+            'analyzed_at': datetime.now().isoformat(),
+            'toxicity': self._default_toxicity_result(),
+            'misinformation': self._default_misinformation_result(),
+            'sensitivity': self._default_sensitivity_result(),
+            'risk_score': 0,
+            'risk_level': '✅ MINIMAL',
+            'should_flag': False,
+            'text_length': 0
+        }
+    
+    def test_connection(self) -> bool:
+        """
+        Teste la connexion à Ollama
+        
+        Returns:
+            True si la connexion fonctionne
+        """
+        try:
+            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                models = response.json().get('models', [])
+                print(f"✅ Connexion à Ollama réussie")
+                print(f"📦 Modèles disponibles: {[m['name'] for m in models]}")
+                return True
+            else:
+                print(f"❌ Erreur de connexion à Ollama: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"❌ Impossible de se connecter à Ollama: {e}")
+            print(f"💡 Assurez-vous qu'Ollama est lancé: ollama serve")
+            return False
+
+
+# Fonction utilitaire pour analyser rapidement un texte
+def analyze_text(text: str, content_type: str = "article") -> Dict:
+    """
+    Fonction utilitaire pour analyser un texte
+    
+    Args:
+        text: Texte à analyser
+        content_type: Type de contenu
+        
+    Returns:
+        Résultat de l'analyse
+    """
+    moderator = ContentModerator()
+    return moderator.analyze_content(text, content_type)

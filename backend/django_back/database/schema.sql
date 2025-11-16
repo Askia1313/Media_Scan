@@ -175,3 +175,54 @@ CREATE INDEX IF NOT EXISTS idx_twitter_tweets_media ON twitter_tweets(media_id);
 CREATE INDEX IF NOT EXISTS idx_twitter_tweets_date ON twitter_tweets(date_publication);
 CREATE INDEX IF NOT EXISTS idx_media_metrics_media ON media_metrics(media_id);
 CREATE INDEX IF NOT EXISTS idx_media_metrics_periode ON media_metrics(periode_debut, periode_fin);
+
+-- ==================== TABLE: CONTENT_MODERATION ====================
+-- Stocke les analyses de modération de contenu (détection de toxicité, fake news, etc.)
+CREATE TABLE IF NOT EXISTS content_moderation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_type TEXT NOT NULL,  -- 'article', 'facebook_post', 'tweet'
+    content_id INTEGER NOT NULL,  -- ID du contenu analysé
+    
+    -- Scores globaux
+    risk_score REAL DEFAULT 0,  -- Score de risque global (0-10)
+    risk_level TEXT,  -- Niveau de risque: MINIMAL, FAIBLE, MOYEN, ÉLEVÉ, CRITIQUE
+    should_flag BOOLEAN DEFAULT 0,  -- Si le contenu doit être signalé
+    
+    -- Analyse de toxicité
+    is_toxic BOOLEAN DEFAULT 0,
+    toxicity_score REAL DEFAULT 0,
+    hate_speech_score REAL DEFAULT 0,
+    violence_score REAL DEFAULT 0,
+    insults_score REAL DEFAULT 0,
+    discrimination_score REAL DEFAULT 0,
+    
+    -- Analyse de désinformation
+    is_misinformation BOOLEAN DEFAULT 0,
+    misinformation_score REAL DEFAULT 0,
+    unverified_claims_score REAL DEFAULT 0,
+    fact_manipulation_score REAL DEFAULT 0,
+    conspiracy_score REAL DEFAULT 0,
+    propaganda_score REAL DEFAULT 0,
+    suspicious_elements TEXT,  -- JSON array
+    
+    -- Analyse de sensibilité
+    is_sensitive BOOLEAN DEFAULT 0,
+    sensitivity_level TEXT,  -- faible, moyen, élevé, critique
+    sensitivity_score REAL DEFAULT 0,
+    sensitive_categories TEXT,  -- JSON array
+    
+    -- Métadonnées
+    toxicity_reason TEXT,
+    misinformation_reason TEXT,
+    sensitivity_reason TEXT,
+    analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    model_used TEXT DEFAULT 'llama3.2',
+    
+    UNIQUE(content_type, content_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_moderation_content ON content_moderation(content_type, content_id);
+CREATE INDEX IF NOT EXISTS idx_moderation_risk ON content_moderation(risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_moderation_flag ON content_moderation(should_flag);
+CREATE INDEX IF NOT EXISTS idx_moderation_toxic ON content_moderation(is_toxic);
+CREATE INDEX IF NOT EXISTS idx_moderation_misinfo ON content_moderation(is_misinformation);
