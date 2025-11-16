@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -21,86 +21,65 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { statsService } from "@/services/stats.service";
-import { classificationService } from "@/services/classification.service";
-import { articleService } from "@/services/article.service";
-import { toast } from "@/hooks/use-toast";
+import { useStats } from "@/hooks/useStats";
+import { useClassificationStats } from "@/hooks/useClassifications";
+import { useRecentArticles } from "@/hooks/useArticles";
 
 const DashboardOverview = () => {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
-  const [themeData, setThemeData] = useState<any[]>([]);
-  const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  // Use TanStack Query hooks
+  const { data: stats, isLoading: statsLoading } = useStats(30);
+  const { data: classificationData, isLoading: classificationLoading } =
+    useClassificationStats(30);
+  const { data: articles, isLoading: articlesLoading } = useRecentArticles(
+    7,
+    1000
+  );
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loading = statsLoading || classificationLoading || articlesLoading;
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
+  // Transform classification data for the pie chart
+  const themeData = useMemo(() => {
+    if (!classificationData) return [];
 
-      // Charger les statistiques globales
-      const statsResponse = await statsService.get(30);
-      if (statsResponse.data && !statsResponse.error) {
-        setStats(statsResponse.data);
+    const colors = [
+      "hsl(var(--chart-1))",
+      "hsl(var(--chart-2))",
+      "hsl(var(--chart-3))",
+      "hsl(var(--chart-4))",
+      "hsl(var(--chart-5))",
+      "hsl(210 20% 65%)",
+    ];
+
+    return classificationData.map((item, index) => ({
+      name: item.categorie,
+      value: item.total,
+      color: colors[index % colors.length],
+    }));
+  }, [classificationData]);
+
+  // Transform articles data for weekly charts
+  const weeklyData = useMemo(() => {
+    if (!articles) return [];
+
+    const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    const grouped = articles.reduce((acc: any, article) => {
+      const date = new Date(article.date_publication);
+      const dayIndex = date.getDay();
+      const dayName = dayNames[dayIndex];
+
+      if (!acc[dayName]) {
+        acc[dayName] = { jour: dayName, articles: 0, engagement: 0 };
       }
+      acc[dayName].articles++;
+      acc[dayName].engagement +=
+        (article.vues || 0) + (article.commentaires || 0);
+      return acc;
+    }, {});
 
-      // Charger les statistiques de classification
-      const classifResponse = await classificationService.getStats(30);
-      if (classifResponse.data && !classifResponse.error) {
-        const colors = [
-          "hsl(var(--chart-1))",
-          "hsl(var(--chart-2))",
-          "hsl(var(--chart-3))",
-          "hsl(var(--chart-4))",
-          "hsl(var(--chart-5))",
-          "hsl(210 20% 65%)",
-        ];
-
-        const themes = classifResponse.data.map((item, index) => ({
-          name: item.categorie,
-          value: item.total,
-          color: colors[index % colors.length],
-        }));
-        setThemeData(themes);
-      }
-
-      // Charger les articles récents pour le graphique hebdomadaire
-      const articlesResponse = await articleService.getRecent(7, 1000);
-      if (articlesResponse.data && !articlesResponse.error) {
-        // Grouper par jour de la semaine
-        const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-        const grouped = articlesResponse.data.reduce((acc: any, article) => {
-          const date = new Date(article.date_publication);
-          const dayIndex = date.getDay();
-          const dayName = dayNames[dayIndex];
-
-          if (!acc[dayName]) {
-            acc[dayName] = { jour: dayName, articles: 0, engagement: 0 };
-          }
-          acc[dayName].articles++;
-          acc[dayName].engagement +=
-            (article.vues || 0) + (article.commentaires || 0);
-          return acc;
-        }, {});
-
-        const weekly = dayNames.map(
-          (day) => grouped[day] || { jour: day, articles: 0, engagement: 0 }
-        );
-        setWeeklyData(weekly);
-      }
-    } catch (error) {
-      console.error("Erreur lors du chargement des données:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les données du tableau de bord",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    return dayNames.map(
+      (day) => grouped[day] || { jour: day, articles: 0, engagement: 0 }
+    );
+  }, [articles]);
 
   const kpiData = [
     {

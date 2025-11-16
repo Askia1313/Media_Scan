@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -38,7 +37,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { toast } from "@/hooks/use-toast";
-import { mediaService } from "@/services/media.service";
+import { useMedia } from "@/hooks/useMedia";
 
 const mediaSchema = z.object({
   name: z
@@ -62,52 +61,34 @@ interface Media {
 }
 
 const MediaManagement = () => {
-  const [loading, setLoading] = useState(true);
-  const [medias, setMedias] = useState<Media[]>([]);
+  // Use TanStack Query hook
+  const { data: mediaData, isLoading: loading } = useMedia();
 
-  useEffect(() => {
-    loadMedias();
-  }, []);
+  // Transform media data
+  const medias = useMemo(() => {
+    if (!mediaData) return [];
 
-  const loadMedias = async () => {
-    try {
-      setLoading(true);
-      const response = await mediaService.getAll();
-      if (response.data && !response.error) {
-        // Transformer les données de l'API au format attendu
-        const transformedMedias = response.data.map((media) => {
-          let type: "web" | "facebook" | "twitter" = "web";
-          let url = media.url;
+    return mediaData.map((media) => {
+      let type: "web" | "facebook" | "twitter" = "web";
+      let url = media.url;
 
-          if (media.facebook_page) {
-            type = "facebook";
-            url = media.facebook_page;
-          } else if (media.twitter_account) {
-            type = "twitter";
-            url = media.twitter_account;
-          }
-
-          return {
-            id: media.id.toString(),
-            name: media.nom,
-            type,
-            url,
-            addedAt: new Date(media.created_at).toISOString().split("T")[0],
-          };
-        });
-        setMedias(transformedMedias);
+      if (media.facebook_page) {
+        type = "facebook";
+        url = media.facebook_page;
+      } else if (media.twitter_account) {
+        type = "twitter";
+        url = media.twitter_account;
       }
-    } catch (error) {
-      console.error("Erreur lors du chargement des médias:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger la liste des médias",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      return {
+        id: media.id.toString(),
+        name: media.nom,
+        type,
+        url,
+        addedAt: new Date(media.created_at).toISOString().split("T")[0],
+      };
+    });
+  }, [mediaData]);
 
   const form = useForm<MediaFormData>({
     resolver: zodResolver(mediaSchema),
@@ -119,30 +100,22 @@ const MediaManagement = () => {
   });
 
   const onSubmit = (data: MediaFormData) => {
-    const newMedia: Media = {
-      id: Date.now().toString(),
-      name: data.name,
-      type: data.type,
-      url: data.url,
-      addedAt: new Date().toISOString().split("T")[0],
-    };
-
-    setMedias([...medias, newMedia]);
-    form.reset();
-
+    // TODO: Implement mutation hook for adding media
+    // For now, this is client-side only and won't persist
     toast({
-      title: "Média ajouté",
-      description: `${data.name} a été ajouté à la liste de surveillance.`,
+      title: "Média ajouté (local)",
+      description: `${data.name} - Cette fonctionnalité nécessite une mutation API.`,
     });
+    form.reset();
   };
 
   const handleDelete = (id: string) => {
+    // TODO: Implement mutation hook for deleting media
+    // For now, this is client-side only and won't persist
     const media = medias.find((m) => m.id === id);
-    setMedias(medias.filter((m) => m.id !== id));
-
     toast({
-      title: "Média supprimé",
-      description: `${media?.name} a été retiré de la surveillance.`,
+      title: "Suppression (local)",
+      description: `${media?.name} - Cette fonctionnalité nécessite une mutation API.`,
       variant: "destructive",
     });
   };

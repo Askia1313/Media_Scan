@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -15,86 +15,64 @@ import {
   Calendar,
   Activity,
 } from "lucide-react";
-import { audienceService } from "@/services/audience.service";
-import { toast } from "@/hooks/use-toast";
+import { useGlobalAudience } from "@/hooks/useAudience";
 
 const ScheduleControl = () => {
-  const [loading, setLoading] = useState(true);
-  const [mediaCompliance, setMediaCompliance] = useState<any[]>([]);
+  // Use TanStack Query hook
+  const { data: audienceData, isLoading: loading } = useGlobalAudience(90);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Transform data to compliance metrics
+  const mediaCompliance = useMemo(() => {
+    if (!audienceData) return [];
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
+    return audienceData.map((media) => {
+      const totalPubs = media.total_publications;
+      const requiredDays = 90;
+      const activeDays = media.web?.jours_avec_publication || 0;
+      const publicationsPerWeek = Math.round((totalPubs / 90) * 7);
+      const expectedPublications = 40;
 
-      const response = await audienceService.getGlobal(90);
-      if (response.data && !response.error) {
-        const compliance = response.data.map((media) => {
-          const totalPubs = media.total_publications;
-          const requiredDays = 90;
-          const activeDays = media.web?.jours_avec_publication || 0;
-          const publicationsPerWeek = Math.round((totalPubs / 90) * 7);
-          const expectedPublications = 40;
+      // Calculer le score de conformité
+      const dayCompliance = (activeDays / requiredDays) * 100;
+      const pubCompliance = Math.min(
+        100,
+        (publicationsPerWeek / expectedPublications) * 100
+      );
+      const complianceScore = Math.round((dayCompliance + pubCompliance) / 2);
 
-          // Calculer le score de conformité
-          const dayCompliance = (activeDays / requiredDays) * 100;
-          const pubCompliance = Math.min(
-            100,
-            (publicationsPerWeek / expectedPublications) * 100
-          );
-          const complianceScore = Math.round(
-            (dayCompliance + pubCompliance) / 2
-          );
-
-          // Déterminer le statut
-          let status = "compliant";
-          if (complianceScore < 70) {
-            status = "alert";
-          } else if (complianceScore < 90) {
-            status = "warning";
-          }
-
-          // Formater la dernière publication
-          const daysSince = media.web?.jours_depuis_derniere_pub || 0;
-          let lastPub = "Jamais";
-          if (daysSince === 0) {
-            lastPub = "Aujourd'hui";
-          } else if (daysSince === 1) {
-            lastPub = "Il y a 1 jour";
-          } else if (daysSince < 7) {
-            lastPub = `Il y a ${daysSince} jours`;
-          } else {
-            lastPub = `Il y a ${Math.floor(daysSince / 7)} semaines`;
-          }
-
-          return {
-            name: media.nom,
-            status,
-            activeDays,
-            requiredDays,
-            lastPublication: lastPub,
-            publicationsPerWeek,
-            expectedPublications,
-            compliance: complianceScore,
-          };
-        });
-
-        setMediaCompliance(compliance);
+      // Déterminer le statut
+      let status = "compliant";
+      if (complianceScore < 70) {
+        status = "alert";
+      } else if (complianceScore < 90) {
+        status = "warning";
       }
-    } catch (error) {
-      console.error("Erreur lors du chargement du contrôle:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les données de conformité",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      // Formater la dernière publication
+      const daysSince = media.web?.jours_depuis_derniere_pub || 0;
+      let lastPub = "Jamais";
+      if (daysSince === 0) {
+        lastPub = "Aujourd'hui";
+      } else if (daysSince === 1) {
+        lastPub = "Il y a 1 jour";
+      } else if (daysSince < 7) {
+        lastPub = `Il y a ${daysSince} jours`;
+      } else {
+        lastPub = `Il y a ${Math.floor(daysSince / 7)} semaines`;
+      }
+
+      return {
+        name: media.nom,
+        status,
+        activeDays,
+        requiredDays,
+        lastPublication: lastPub,
+        publicationsPerWeek,
+        expectedPublications,
+        compliance: complianceScore,
+      };
+    });
+  }, [audienceData]);
 
   if (loading) {
     return (
