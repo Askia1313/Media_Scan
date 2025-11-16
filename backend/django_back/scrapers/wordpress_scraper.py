@@ -14,13 +14,13 @@ from database.models import Article
 class WordPressScraper:
     """Scraper pour les sites WordPress utilisant l'API REST"""
     
-    def __init__(self, base_url: str, timeout: int = 10):
+    def __init__(self, base_url: str, timeout: int = 30):
         """
         Initialise le scraper WordPress
         
         Args:
             base_url: URL de base du site (ex: https://lefaso.net)
-            timeout: Timeout pour les requêtes HTTP
+            timeout: Timeout pour les requêtes HTTP (en secondes)
         """
         self.base_url = base_url.rstrip('/')
         self.api_root = f"{self.base_url}/wp-json/"  # Endpoint racine pour détection
@@ -33,10 +33,10 @@ class WordPressScraper:
     
     def is_wordpress(self) -> bool:
         """
-        Vérifier si le site utilise WordPress
+        Vérifier si le site utilise WordPress et si l'API est accessible
         
         Returns:
-            True si WordPress est détecté, False sinon
+            True si WordPress est détecté ET l'API est accessible, False sinon
         """
         try:
             # Debug: Afficher l'URL testée
@@ -66,7 +66,25 @@ class WordPressScraper:
                         print(f"   ❌ Pas de 'namespaces' dans la réponse")
                         print(f"   📄 Clés disponibles: {list(data.keys())[:5]}")
                     
-                    return has_namespaces and has_wp_v2
+                    if has_namespaces and has_wp_v2:
+                        # WordPress détecté, maintenant tester l'accès aux posts
+                        print(f"   🔍 Test accès posts: {self.api_url}posts?per_page=1")
+                        posts_response = self.session.get(
+                            f"{self.api_url}posts?per_page=1",
+                            timeout=self.timeout
+                        )
+                        
+                        if posts_response.status_code == 401:
+                            print(f"   ❌ API bloquée (401) - Basculement vers HTML scraping")
+                            return False
+                        elif posts_response.status_code == 200:
+                            print(f"   ✅ API posts accessible")
+                            return True
+                        else:
+                            print(f"   ⚠️ Status posts: {posts_response.status_code}")
+                            return True  # On essaie quand même
+                    
+                    return False
                 
                 except ValueError as e:
                     print(f"   ❌ Réponse non-JSON: {response.text[:200]}")
@@ -116,7 +134,8 @@ class WordPressScraper:
                 params = {
                     'per_page': per_page,
                     'page': page,
-                    'after': date_limit_str,  # Articles après cette date (format ISO 8601)
+                    # Note: Le paramètre 'after' ne fonctionne pas sur tous les sites
+                    # On filtre côté client à la place
                     'orderby': 'date',
                     'order': 'desc',
                     '_embed': 'true'  # Inclure les médias et auteurs
@@ -128,6 +147,25 @@ class WordPressScraper:
                     timeout=self.timeout
                 )
                 
+                # Gestion de l'erreur 401 (API bloquée par iThemes Security ou autre)
+                if response.status_code == 401:
+                    try:
+                        error_data = response.json()
+                        error_code = error_data.get('code', '')
+                        error_message = error_data.get('message', '')
+                        
+                        if 'itsec' in error_code or 'security' in error_message.lower():
+                            print(f"   ❌ API WordPress bloquée par plugin de sécurité (iThemes Security)")
+                            print(f"   💡 Le site utilise WordPress mais l'API REST est protégée")
+                        else:
+                            print(f"   ❌ Erreur 401: Accès non autorisé à l'API")
+                    except:
+                        print(f"   ❌ Erreur HTTP 401: Accès non autorisé")
+                    
+                    # Arrêter et retourner une liste vide
+                    print(f"✅ Total: 0 articles récupérés (API protégée)")
+                    return all_posts
+                
                 if response.status_code == 200:
                     posts = response.json()
                     
@@ -137,34 +175,40 @@ class WordPressScraper:
                     
                     # Filtrer les articles par date (vérification côté client)
                     filtered_posts = []
+                    articles_too_old = 0
+                    
                     for post in posts:
                         try:
                             post_date_str = post.get('date', '')
                             if post_date_str:
                                 # Parser la date de l'article
                                 post_date = datetime.fromisoformat(post_date_str.replace('Z', '+00:00'))
+                                # Enlever timezone pour comparaison
+                                post_date_naive = post_date.replace(tzinfo=None)
+                                date_limit_naive = date_limit.replace(tzinfo=None) if hasattr(date_limit, 'tzinfo') else date_limit
+                                
                                 # Vérifier si l'article est dans la période
-                                if post_date >= date_limit:
+                                if post_date_naive >= date_limit_naive:
                                     filtered_posts.append(post)
                                 else:
-                                    # Si on trouve un article trop ancien, arrêter la pagination
-                                    print(f"   Page {page}: Article trop ancien trouvé, arrêt de la collecte")
-                                    all_posts.extend(filtered_posts)
-                                    print(f"✅ Total: {len(all_posts)} articles récupérés (filtrés par date)")
-                                    return all_posts
+                                    articles_too_old += 1
                             else:
                                 # Si pas de date, on garde l'article
                                 filtered_posts.append(post)
-                        except:
+                        except Exception as e:
                             # En cas d'erreur de parsing, on garde l'article
                             filtered_posts.append(post)
                     
                     all_posts.extend(filtered_posts)
-                    print(f"   Page {page}: {len(filtered_posts)}/{len(posts)} articles (dans les {days} derniers jours)")
                     
-                    # Si aucun article filtré, arrêter
-                    if len(filtered_posts) == 0:
-                        print(f"   Page {page}: Aucun article récent, arrêt")
+                    if articles_too_old > 0:
+                        print(f"   Page {page}: {len(filtered_posts)}/{len(posts)} articles récents ({articles_too_old} trop anciens)")
+                    else:
+                        print(f"   Page {page}: {len(filtered_posts)} articles récupérés")
+                    
+                    # Si tous les articles sont trop anciens, arrêter
+                    if len(filtered_posts) == 0 and articles_too_old > 0:
+                        print(f"   Page {page}: Tous les articles sont trop anciens, arrêt")
                         break
                     
                     # Pause pour ne pas surcharger le serveur
@@ -183,7 +227,12 @@ class WordPressScraper:
                 print(f"   Page {page}: Erreur - {e}")
                 break
         
-        print(f"✅ Total: {len(all_posts)} articles récupérés")
+        total_retrieved = len(all_posts)
+        print(f"✅ Total: {total_retrieved} articles récupérés")
+        
+        if total_retrieved > 0:
+            print(f"   📊 Période demandée: {days} derniers jours (depuis {date_limit.strftime('%Y-%m-%d')})")
+        
         return all_posts
     
     def parse_post(self, post_data: Dict[str, Any], media_id: int) -> Article:

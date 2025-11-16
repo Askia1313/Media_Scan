@@ -16,13 +16,13 @@ from database.models import Article
 class HTMLScraper:
     """Scraper HTML générique pour sites non-WordPress"""
     
-    def __init__(self, base_url: str, timeout: int = 10):
+    def __init__(self, base_url: str, timeout: int = 30):
         """
         Initialise le scraper HTML
         
         Args:
             base_url: URL de base du site
-            timeout: Timeout pour les requêtes HTTP
+            timeout: Timeout pour les requêtes HTTP (en secondes)
         """
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
@@ -73,7 +73,8 @@ class HTMLScraper:
             'h2 a[href]',
             'h3 a[href]',
             '.entry-title a[href]',
-            '.post-title a[href]'
+            '.post-title a[href]',
+            'a[href*="/20"]',  # URLs avec année (ex: /2024/, /2025/)
         ]
         
         for selector in selectors:
@@ -88,6 +89,20 @@ class HTMLScraper:
                     if urlparse(full_url).netloc == urlparse(self.base_url).netloc:
                         # Éviter les doublons
                         if full_url not in links and self._is_article_url(full_url):
+                            links.append(full_url)
+        
+        # Si on n'a pas trouvé assez de liens, chercher tous les liens internes
+        if len(links) < 10:
+            print(f"   ⚠️ Peu de liens trouvés ({len(links)}), recherche élargie...")
+            all_links = soup.find_all('a', href=True)
+            for link in all_links:
+                href = link.get('href')
+                full_url = urljoin(self.base_url, href)
+                
+                if urlparse(full_url).netloc == urlparse(self.base_url).netloc:
+                    if full_url not in links and self._is_article_url(full_url):
+                        # Vérifier que l'URL ressemble à un article (contient du texte)
+                        if len(full_url.split('/')) > 4:  # Au moins /domain/path/article
                             links.append(full_url)
         
         return list(set(links))  # Supprimer les doublons
@@ -107,12 +122,31 @@ class HTMLScraper:
             '/category/', '/tag/', '/author/', '/page/',
             '/wp-admin/', '/wp-content/', '/wp-includes/',
             '.jpg', '.png', '.gif', '.pdf', '.css', '.js',
-            '/contact', '/about', '/mentions-legales'
+            '/contact', '/about', '/mentions-legales',
+            '/archives/', '/feed', '/comments'
         ]
         
         url_lower = url.lower()
         for pattern in excluded_patterns:
             if pattern in url_lower:
+                return False
+        
+        # Exclure les URLs d'archives (qui se terminent par /YYYY/MM/ ou /YYYY/)
+        # Ex: /2025/03/ ou /2025/
+        import re
+        if re.search(r'/\d{4}(/\d{2})?/?$', url):
+            return False
+        
+        # L'URL doit avoir au moins quelques segments pour être un article
+        # Ex: https://site.com/titre-article/ ou https://site.com/2025/03/15/titre-article/
+        path_segments = [s for s in urlparse(url).path.split('/') if s]
+        if len(path_segments) < 1:  # Au moins un segment (le titre)
+            return False
+        
+        # Si l'URL contient une année, elle doit avoir au moins 4 segments
+        # Ex: /2025/03/15/titre/ (année/mois/jour/titre)
+        if any(re.match(r'^\d{4}$', seg) for seg in path_segments):
+            if len(path_segments) < 4:
                 return False
         
         return True

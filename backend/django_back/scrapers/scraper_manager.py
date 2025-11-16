@@ -59,22 +59,27 @@ class ScraperManager:
                 # Scraper les articles
                 articles = wp_scraper.scrape(media_id, days=days)
                 
-                # Sauvegarder en base
-                saved_count = self._save_articles(articles)
-                
-                # Mettre à jour la date de dernière collecte
-                self.db.update_media_last_scrape(media_id)
-                
-                # Logger
-                self.db.add_scraping_log(
-                    media_id=media_id,
-                    status='success',
-                    methode='wordpress_api',
-                    articles_collectes=saved_count,
-                    message=f"{saved_count} articles collectés via API WordPress"
-                )
-                
-                return saved_count, 'wordpress_api', f"✅ {saved_count} articles collectés via API WordPress"
+                # Si aucun article récupéré, peut-être que l'API est bloquée
+                if len(articles) == 0:
+                    print("⚠️ Aucun article récupéré via API WordPress (peut-être bloquée)")
+                    print("   💡 Tentative de fallback vers HTML scraping...")
+                else:
+                    # Sauvegarder en base
+                    saved_count = self._save_articles(articles)
+                    
+                    # Mettre à jour la date de dernière collecte
+                    self.db.update_media_last_scrape(media_id)
+                    
+                    # Logger
+                    self.db.add_scraping_log(
+                        media_id=media_id,
+                        status='success',
+                        methode='wordpress_api',
+                        articles_collectes=saved_count,
+                        message=f"{saved_count} articles collectés via API WordPress"
+                    )
+                    
+                    return saved_count, 'wordpress_api', f"✅ {saved_count} articles collectés via API WordPress"
             
             else:
                 print("⚠️ Site non-WordPress ou API non accessible")
@@ -137,6 +142,7 @@ class ScraperManager:
             Nombre d'articles sauvegardés (nouveaux uniquement)
         """
         saved_count = 0
+        duplicate_count = 0
         
         for article in articles:
             # Vérifier si l'article existe déjà
@@ -144,6 +150,11 @@ class ScraperManager:
                 article_id = self.db.add_article(article)
                 if article_id:
                     saved_count += 1
+            else:
+                duplicate_count += 1
+        
+        if duplicate_count > 0:
+            print(f"   💾 {saved_count} nouveaux articles, {duplicate_count} doublons ignorés")
         
         return saved_count
     
