@@ -3,9 +3,8 @@
 # Les lignes commençant par # sont des commentaires
 
 # Médias burkinabè principaux
-# https://lefaso.net
+https://lefaso.net
 https://www.sidwaya.info
-https://www.lobservateur.bf
 https://www.aib.media
 https://burkina24.com
-https://lepays.bf
+

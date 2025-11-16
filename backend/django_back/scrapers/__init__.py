@@ -1,9 +1,8 @@
 """
-Module de scraping multi-sources
+Module de scraping HTML intelligent
 """
 
-from .wordpress_scraper import WordPressScraper
-from .html_scraper import HTMLScraper
+from .smart_html_scraper import SmartHTMLScraper
 from .scraper_manager import ScraperManager
 
-__all__ = ['WordPressScraper', 'HTMLScraper', 'ScraperManager']
+__all__ = ['SmartHTMLScraper', 'ScraperManager']

@@ -7,12 +7,11 @@ from urllib.parse import urlparse
 
 from database.db_manager import DatabaseManager
 from database.models import Article
-from .wordpress_scraper import WordPressScraper
-from .html_scraper import HTMLScraper
+from .smart_html_scraper import SmartHTMLScraper
 
 
 class ScraperManager:
-    """Gestionnaire de scraping avec détection automatique et fallback"""
+    """Gestionnaire de scraping HTML intelligent"""
     
     def __init__(self, db_manager: DatabaseManager):
         """
@@ -25,7 +24,7 @@ class ScraperManager:
     
     def scrape_site(self, url: str, days: int = 30) -> Tuple[int, str, str]:
         """
-        Scraper un site avec détection automatique WordPress/HTML
+        Scraper un site avec le scraper HTML intelligent
         
         Args:
             url: URL du site à scraper
@@ -43,60 +42,17 @@ class ScraperManager:
         
         print(f"\n{'='*60}")
         print(f"🎯 Scraping: {media_name} ({url})")
-        print(f"{'='*60}")
+        print(f"{'='*60}\n")
         
-        # Tentative 1: WordPress API
-        print("\n📡 Tentative 1: API WordPress...")
         try:
-            wp_scraper = WordPressScraper(url)
-            
-            if wp_scraper.is_wordpress():
-                print("✅ Site WordPress détecté!")
-                
-                # Ajouter/mettre à jour le média
-                media_id = self.db.add_media(media_name, url, 'wordpress')
-                
-                # Scraper les articles
-                articles = wp_scraper.scrape(media_id, days=days)
-                
-                # Si aucun article récupéré, peut-être que l'API est bloquée
-                if len(articles) == 0:
-                    print("⚠️ Aucun article récupéré via API WordPress (peut-être bloquée)")
-                    print("   💡 Tentative de fallback vers HTML scraping...")
-                else:
-                    # Sauvegarder en base
-                    saved_count = self._save_articles(articles)
-                    
-                    # Mettre à jour la date de dernière collecte
-                    self.db.update_media_last_scrape(media_id)
-                    
-                    # Logger
-                    self.db.add_scraping_log(
-                        media_id=media_id,
-                        status='success',
-                        methode='wordpress_api',
-                        articles_collectes=saved_count,
-                        message=f"{saved_count} articles collectés via API WordPress"
-                    )
-                    
-                    return saved_count, 'wordpress_api', f"✅ {saved_count} articles collectés via API WordPress"
-            
-            else:
-                print("⚠️ Site non-WordPress ou API non accessible")
-        
-        except Exception as e:
-            print(f"❌ Erreur WordPress API: {e}")
-        
-        # Tentative 2: Scraping HTML
-        print("\n🌐 Tentative 2: Scraping HTML...")
-        try:
-            html_scraper = HTMLScraper(url)
+            # Utiliser le scraper HTML intelligent
+            scraper = SmartHTMLScraper(url)
             
             # Ajouter/mettre à jour le média
             media_id = self.db.add_media(media_name, url, 'html')
             
             # Scraper les articles
-            articles = html_scraper.scrape(media_id, days=days, max_articles=50)
+            articles = scraper.scrape(media_id, days=days, max_articles=100)
             
             # Sauvegarder en base
             saved_count = self._save_articles(articles)
@@ -116,7 +72,7 @@ class ScraperManager:
             return saved_count, 'html_scraping', f"✅ {saved_count} articles collectés via scraping HTML"
         
         except Exception as e:
-            error_msg = f"❌ Erreur scraping HTML: {e}"
+            error_msg = f"❌ Erreur scraping: {e}"
             print(error_msg)
             
             # Logger l'erreur
@@ -198,7 +154,6 @@ class ScraperManager:
             'errors': 0,
             'total_articles': 0,
             'by_method': {
-                'wordpress_api': 0,
                 'html_scraping': 0,
                 'error': 0
             },
@@ -243,7 +198,6 @@ class ScraperManager:
         print(f"   • Erreurs: {stats['errors']}")
         print(f"\n📰 Total articles collectés: {stats['total_articles']}")
         print(f"\n🔧 Par méthode:")
-        print(f"   • WordPress API: {stats['by_method'].get('wordpress_api', 0)} articles")
         print(f"   • HTML Scraping: {stats['by_method'].get('html_scraping', 0)} articles")
         
         print(f"\n📋 Détails par site:")
