@@ -4,7 +4,7 @@
 
 import { apiClient, ApiResponse } from './api.client';
 import { API_ENDPOINTS } from './api.config';
-import { ScrapingRequest, ScrapingResponse } from './types';
+import { ScrapingRequest, ScrapingResponse, ScrapingSchedule, ScrapingScheduleResponse } from './types';
 
 export const scrapingService = {
   /**
@@ -55,5 +55,39 @@ export const scrapingService = {
       fb_posts: options?.fbPosts,
       tweets: options?.tweets,
     });
+  },
+
+  /**
+   * Récupérer la configuration de l'automatisation
+   */
+  async getSchedule(): Promise<ApiResponse<ScrapingSchedule>> {
+    return apiClient.get<ScrapingSchedule>(API_ENDPOINTS.SCRAPING_SCHEDULE);
+  },
+
+  /**
+   * Créer ou mettre à jour l'automatisation du scraping
+   */
+  async updateSchedule(schedule: ScrapingSchedule): Promise<ApiResponse<ScrapingScheduleResponse>> {
+    return apiClient.post<ScrapingScheduleResponse>(
+      API_ENDPOINTS.SCRAPING_SCHEDULE,
+      schedule
+    );
+  },
+
+  /**
+   * Activer/Désactiver l'automatisation
+   */
+  async toggleSchedule(enabled: boolean): Promise<ApiResponse<ScrapingScheduleResponse>> {
+    return apiClient.post<ScrapingScheduleResponse>(
+      API_ENDPOINTS.SCRAPING_SCHEDULE,
+      { enabled }
+    );
+  },
+
+  /**
+   * Supprimer l'automatisation
+   */
+  async deleteSchedule(): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(API_ENDPOINTS.SCRAPING_SCHEDULE);
   },
 };

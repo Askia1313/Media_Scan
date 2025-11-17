@@ -37,7 +37,12 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useScrapeAll } from "@/hooks/useScraping";
+import {
+  useScrapeAll,
+  useScrapingSchedule,
+  useUpdateScrapingSchedule,
+  useToggleScrapingSchedule,
+} from "@/hooks/useScraping";
 
 interface ScrapingTask {
   id: string;
@@ -65,12 +70,10 @@ const ScrapingControl = () => {
     },
   ]);
 
-  const [automation, setAutomation] = useState({
-    enabled: false,
-    frequency: "daily",
-  });
-
   const scrapeAllMutation = useScrapeAll();
+  const { data: schedule } = useScrapingSchedule();
+  const updateScheduleMutation = useUpdateScrapingSchedule();
+  const toggleScheduleMutation = useToggleScrapingSchedule();
 
   const handleLaunchScraping = async (
     type: "html" | "rss" | "twitter" | "facebook"
@@ -118,59 +121,7 @@ const ScrapingControl = () => {
   };
 
   const handleAutomationToggle = (enabled: boolean) => {
-    setAutomation({ ...automation, enabled });
-
-    toast({
-      title: enabled ? "Automatisation activée" : "Automatisation désactivée",
-      description: enabled
-        ? `Le scraping sera exécuté automatiquement toutes les ${getFrequencyLabel(
-            automation.frequency
-          )}.`
-        : "Le scraping automatique a été désactivé.",
-    });
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "html":
-        return "HTML";
-      case "rss":
-        return "RSS";
-      case "twitter":
-        return "Twitter";
-      case "facebook":
-        return "Facebook";
-      default:
-        return type;
-    }
-  };
-
-  const getFrequencyLabel = (frequency: string) => {
-    switch (frequency) {
-      case "hourly":
-        return "heures";
-      case "daily":
-        return "jours";
-      case "weekly":
-        return "semaines";
-      default:
-        return frequency;
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "html":
-        return <Globe className="h-4 w-4" />;
-      case "rss":
-        return <Rss className="h-4 w-4" />;
-      case "twitter":
-        return <Twitter className="h-4 w-4" />;
-      case "facebook":
-        return <Facebook className="h-4 w-4" />;
-      default:
-        return null;
-    }
+    toggleScheduleMutation.mutate(enabled);
   };
 
   const getStatusBadge = (status: string) => {
@@ -265,18 +216,21 @@ const ScrapingControl = () => {
             </div>
             <Switch
               id="automation-switch"
-              checked={automation.enabled}
+              checked={schedule?.enabled || false}
               onCheckedChange={handleAutomationToggle}
             />
           </div>
 
-          {automation.enabled && (
+          {schedule?.enabled && (
             <div className="space-y-2 pt-2 border-t">
               <Label htmlFor="frequency">Fréquence d'exécution</Label>
               <Select
-                value={automation.frequency}
+                value={schedule.frequency}
                 onValueChange={(value) =>
-                  setAutomation({ ...automation, frequency: value })
+                  updateScheduleMutation.mutate({
+                    ...schedule,
+                    frequency: value as "hourly" | "daily" | "weekly",
+                  })
                 }
               >
                 <SelectTrigger id="frequency">
@@ -288,10 +242,12 @@ const ScrapingControl = () => {
                   <SelectItem value="weekly">Toutes les semaines</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-sm text-muted-foreground">
-                Prochaine exécution :{" "}
-                {new Date(Date.now() + 3600000).toLocaleString("fr-FR")}
-              </p>
+              {schedule.next_run && (
+                <p className="text-sm text-muted-foreground">
+                  Prochaine exécution :{" "}
+                  {new Date(schedule.next_run).toLocaleString("fr-FR")}
+                </p>
+              )}
             </div>
           )}
         </CardContent>

@@ -205,6 +205,25 @@ export interface ScrapingResponse {
   total_tweets: number;
 }
 
+export interface ScrapingSchedule {
+  id?: number;
+  enabled: boolean;
+  frequency: 'hourly' | 'daily' | 'weekly';
+  days?: number;
+  fb_posts?: number;
+  tweets?: number;
+  next_run?: string;
+  last_run?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ScrapingScheduleResponse {
+  status: string;
+  message: string;
+  schedule?: ScrapingSchedule;
+}
+
 // Statistiques
 export interface Stats {
   total_medias: number;
