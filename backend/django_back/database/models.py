@@ -14,6 +14,8 @@ class Media:
     nom: str = ""
     url: str = ""
     type_site: str = ""  # wordpress, html, autre
+    facebook_page: Optional[str] = None  # Nom/ID de la page Facebook
+    twitter_account: Optional[str] = None  # Nom du compte Twitter (sans @)
     actif: bool = True
     derniere_collecte: Optional[datetime] = None
     created_at: Optional[datetime] = None

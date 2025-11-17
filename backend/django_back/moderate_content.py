@@ -50,12 +50,16 @@ def moderate_articles(db: DatabaseManager, moderator: ContentModerator, limit: i
             flagged += 1
             print(f"   🚨 SIGNALÉ - {analysis['risk_level']} (Score: {analysis['risk_score']})")
             
+            flags = []
             if analysis['toxicity']['est_toxique']:
-                print(f"      ⚠️ Toxique: {analysis['toxicity']['raison']}")
+                flags.append(f"Toxicité: {analysis['toxicity']['score_toxicite']}/10")
             if analysis['misinformation']['est_desinformation']:
-                print(f"      ⚠️ Désinformation: {analysis['misinformation']['raison']}")
+                flags.append(f"Désinformation: {analysis['misinformation']['score_desinformation']}/10")
             if analysis['sensitivity']['est_sensible']:
-                print(f"      ⚠️ Sensible: {analysis['sensitivity']['raison']}")
+                flags.append(f"Sensibilité: {analysis['sensitivity']['score_sensibilite']}/10")
+            
+            if flags:
+                print(f"      ⚠️ {' | '.join(flags)}")
         else:
             print(f"   ✅ OK - {analysis['risk_level']} (Score: {analysis['risk_score']})")
     

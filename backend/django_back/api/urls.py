@@ -21,6 +21,8 @@ from .views import (
     MediaRankingView,
     # Scraping
     ScrapingTriggerView,
+    # Modération
+    ModerationStatsView, FlaggedContentListView, ContentModerationView,
     # Stats
     stats_overview, health_check
 )
@@ -59,6 +61,11 @@ urlpatterns = [
     
     # Scraping
     path('scraping/trigger/', ScrapingTriggerView.as_view(), name='scraping-trigger'),
+    
+    # Modération
+    path('moderation/stats/', ModerationStatsView.as_view(), name='moderation-stats'),
+    path('moderation/flagged/', FlaggedContentListView.as_view(), name='flagged-content'),
+    path('moderation/content/', ContentModerationView.as_view(), name='content-moderation'),
     
     # Stats
     path('stats/', stats_overview, name='stats-overview'),

@@ -21,29 +21,13 @@ load_dotenv()
 
 def load_config_file(file_path: str) -> dict:
     """
-    Charger un fichier de configuration
+    [DEPRECATED] Charger un fichier de configuration
+    Conservé pour compatibilité mais non utilisé
     
     Returns:
         Dictionnaire {url_site: identifiant}
     """
-    config = {}
-    
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                
-                parts = line.split('|')
-                if len(parts) >= 3:
-                    nom, url, identifier = parts[0], parts[1], parts[2]
-                    config[url] = identifier
-    
-    except FileNotFoundError:
-        print(f"⚠️ Fichier {file_path} non trouvé")
-    
-    return config
+    return {}
 
 
 def scrape_facebook_for_media(db: DatabaseManager, fb_scraper: FacebookScraper, 
@@ -159,10 +143,6 @@ def main():
     db = DatabaseManager()
     scraper_manager = ScraperManager(db, auto_classify=True)
     
-    # Charger les configurations
-    fb_pages = load_config_file('facebook_pages.txt')
-    tw_accounts = load_config_file('twitter_accounts.txt')
-    
     # Initialiser le scraper Facebook
     fb_scraper = None
     if not args.skip_facebook:
@@ -207,61 +187,57 @@ def main():
         media = db.get_media_by_url(args.url)
         if media:
             # Scraping Facebook
-            if fb_scraper and args.url in fb_pages:
+            if fb_scraper and media.facebook_page:
                 scrape_facebook_for_media(
                     db, fb_scraper, media.id, 
-                    fb_pages[args.url], args.fb_posts
+                    media.facebook_page, args.fb_posts
                 )
             
             # Scraping Twitter
-            if tw_scraper and args.url in tw_accounts:
+            if tw_scraper and media.twitter_account:
                 scrape_twitter_for_media(
                     db, tw_scraper, media.id,
-                    tw_accounts[args.url], args.tweets
+                    media.twitter_account, args.tweets
                 )
     
     # Scraper tous les sites
     elif args.all:
         print("="*60)
-        print("🚀 SCRAPING MULTI-SITES")
+        print("🚀 SCRAPING MULTI-SITES (depuis table media)")
         print("="*60)
         
-        # Lire sites.txt
-        try:
-            with open('sites.txt', 'r', encoding='utf-8') as f:
-                sites = [line.strip() for line in f 
-                        if line.strip() and not line.startswith('#')]
-        except FileNotFoundError:
-            print("❌ Fichier sites.txt non trouvé")
+        # Récupérer tous les médias actifs
+        medias = db.get_all_medias(actif_only=True)
+        
+        if not medias:
+            print("❌ Aucun média trouvé dans la table media")
             return
         
         total_articles = 0
         
-        for i, url in enumerate(sites, 1):
-            print(f"\n[{i}/{len(sites)}] {url}")
+        for i, media in enumerate(medias, 1):
+            print(f"\n[{i}/{len(medias)}] {media.nom} ({media.url})")
             print("-"*60)
             
             # Scraping web
-            count, method, message = scraper_manager.scrape_site(url, days=args.days)
-            total_articles += count
-            print(f"   {message}")
+            if media.url:
+                count, method, message = scraper_manager.scrape_site(media.url, days=args.days)
+                total_articles += count
+                print(f"   {message}")
             
-            # Récupérer le média
-            media = db.get_media_by_url(url)
-            if media:
-                # Scraping Facebook
-                if fb_scraper and url in fb_pages:
-                    scrape_facebook_for_media(
-                        db, fb_scraper, media.id,
-                        fb_pages[url], args.fb_posts
-                    )
-                
-                # Scraping Twitter
-                if tw_scraper and url in tw_accounts:
-                    scrape_twitter_for_media(
-                        db, tw_scraper, media.id,
-                        tw_accounts[url], args.tweets
-                    )
+            # Scraping Facebook
+            if fb_scraper and media.facebook_page:
+                scrape_facebook_for_media(
+                    db, fb_scraper, media.id,
+                    media.facebook_page, args.fb_posts
+                )
+            
+            # Scraping Twitter
+            if tw_scraper and media.twitter_account:
+                scrape_twitter_for_media(
+                    db, tw_scraper, media.id,
+                    media.twitter_account, args.tweets
+                )
         
         # Résumé
         print("\n" + "="*60)
@@ -285,6 +261,84 @@ def main():
             if media['engagement_total'] > 0:
                 print(f"   Total: {media['engagement_total']:,}")
             print()
+        
+        # Lancer la modération de contenu
+        print("\n" + "="*60)
+        print("🛡️ MODÉRATION DE CONTENU")
+        print("="*60 + "\n")
+        
+        try:
+            from analysis.content_moderator import ContentModerator
+            
+            moderator = ContentModerator()
+            
+            # Vérifier la connexion à Ollama
+            if not moderator.check_ollama_status():
+                print("⚠️ Ollama non disponible, modération ignorée")
+            else:
+                print("✅ Ollama connecté, lancement de la modération...\n")
+                
+                # Modérer les articles
+                articles = db.get_recent_articles(days=args.days, limit=1000)
+                analyzed = 0
+                flagged = 0
+                
+                for article in articles:
+                    # Vérifier si déjà analysé
+                    existing = db.get_content_moderation('article', article.id)
+                    if existing:
+                        continue
+                    
+                    text = f"{article.titre}\n\n{article.contenu or article.extrait or ''}"
+                    analysis = moderator.analyze_content(text, 'article')
+                    db.add_content_moderation('article', article.id, analysis)
+                    
+                    analyzed += 1
+                    if analysis['should_flag']:
+                        flagged += 1
+                        print(f"🚨 Article {article.id} signalé - {analysis['risk_level']} (Score: {analysis['risk_score']})")
+                
+                # Modérer les posts Facebook
+                if not args.skip_facebook:
+                    posts = db.get_recent_facebook_posts(days=args.days, limit=500)
+                    for post in posts:
+                        existing = db.get_content_moderation('facebook_post', post.id)
+                        if existing:
+                            continue
+                        
+                        text = post.message or ""
+                        if text.strip():
+                            analysis = moderator.analyze_content(text, 'facebook_post')
+                            db.add_content_moderation('facebook_post', post.id, analysis)
+                            analyzed += 1
+                            if analysis['should_flag']:
+                                flagged += 1
+                
+                # Modérer les tweets
+                if not args.skip_twitter:
+                    tweets = db.get_recent_twitter_tweets(days=args.days, limit=500)
+                    for tweet in tweets:
+                        existing = db.get_content_moderation('tweet', tweet.id)
+                        if existing:
+                            continue
+                        
+                        text = tweet.text or ""
+                        if text.strip():
+                            analysis = moderator.analyze_content(text, 'tweet')
+                            db.add_content_moderation('tweet', tweet.id, analysis)
+                            analyzed += 1
+                            if analysis['should_flag']:
+                                flagged += 1
+                
+                print(f"\n✅ Modération terminée:")
+                print(f"   Contenus analysés: {analyzed}")
+                print(f"   Contenus signalés: {flagged}")
+                if analyzed > 0:
+                    print(f"   Taux de signalement: {(flagged/analyzed)*100:.1f}%")
+        
+        except Exception as e:
+            print(f"⚠️ Erreur lors de la modération: {e}")
+            print("   Le scraping a réussi mais la modération a échoué")
     
     else:
         print("❌ Spécifiez --url ou --all")

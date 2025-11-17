@@ -36,19 +36,64 @@ class MediaListView(APIView):
     """Liste tous les médias"""
     
     def get(self, request):
-        """GET /api/medias/"""
-        medias = db.get_all_medias(actif_only=False)
+        """GET /api/medias/?actif=true"""
+        actif_only = request.GET.get('actif', 'false').lower() == 'true'
+        medias = db.get_all_medias(actif_only=actif_only)
         serializer = MediaSerializer([{
             'id': m.id,
             'nom': m.nom,
             'url': m.url,
             'type_site': m.type_site,
+            'facebook_page': m.facebook_page,
+            'twitter_account': m.twitter_account,
             'actif': m.actif,
             'derniere_collecte': m.derniere_collecte,
             'created_at': m.created_at
         } for m in medias], many=True)
         
         return Response(serializer.data)
+    
+    def post(self, request):
+        """POST /api/medias/ - Créer un nouveau média"""
+        serializer = MediaSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            media_id = db.add_media(
+                nom=serializer.validated_data['nom'],
+                url=serializer.validated_data['url'],
+                type_site=serializer.validated_data.get('type_site', 'unknown'),
+                facebook_page=serializer.validated_data.get('facebook_page'),
+                twitter_account=serializer.validated_data.get('twitter_account')
+            )
+            
+            # Récupérer le média créé
+            media = db.get_media_by_url(serializer.validated_data['url'])
+            
+            response_data = {
+                'id': media.id,
+                'nom': media.nom,
+                'url': media.url,
+                'type_site': media.type_site,
+                'facebook_page': media.facebook_page,
+                'twitter_account': media.twitter_account,
+                'actif': media.actif,
+                'derniere_collecte': media.derniere_collecte,
+                'created_at': media.created_at
+            }
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MediaDetailView(APIView):
@@ -71,12 +116,128 @@ class MediaDetailView(APIView):
             'nom': media.nom,
             'url': media.url,
             'type_site': media.type_site,
+            'facebook_page': media.facebook_page,
+            'twitter_account': media.twitter_account,
             'actif': media.actif,
             'derniere_collecte': media.derniere_collecte,
             'created_at': media.created_at
         })
         
         return Response(serializer.data)
+    
+    def put(self, request, media_id):
+        """PUT /api/medias/{id}/ - Mettre à jour un média"""
+        # Vérifier que le média existe
+        medias = db.get_all_medias(actif_only=False)
+        media = next((m for m in medias if m.id == media_id), None)
+        
+        if not media:
+            return Response(
+                {'error': 'Média non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = MediaSerializer(data=request.data, partial=True)
+        
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Mettre à jour le média
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            update_fields = []
+            params = []
+            
+            if 'nom' in serializer.validated_data:
+                update_fields.append('nom = ?')
+                params.append(serializer.validated_data['nom'])
+            
+            if 'url' in serializer.validated_data:
+                update_fields.append('url = ?')
+                params.append(serializer.validated_data['url'])
+            
+            if 'type_site' in serializer.validated_data:
+                update_fields.append('type_site = ?')
+                params.append(serializer.validated_data['type_site'])
+            
+            if 'facebook_page' in serializer.validated_data:
+                update_fields.append('facebook_page = ?')
+                params.append(serializer.validated_data['facebook_page'])
+            
+            if 'twitter_account' in serializer.validated_data:
+                update_fields.append('twitter_account = ?')
+                params.append(serializer.validated_data['twitter_account'])
+            
+            if 'actif' in serializer.validated_data:
+                update_fields.append('actif = ?')
+                params.append(serializer.validated_data['actif'])
+            
+            if update_fields:
+                params.append(media_id)
+                query = f"UPDATE medias SET {', '.join(update_fields)} WHERE id = ?"
+                cursor.execute(query, params)
+                conn.commit()
+            
+            conn.close()
+            
+            # Récupérer le média mis à jour
+            medias = db.get_all_medias(actif_only=False)
+            updated_media = next((m for m in medias if m.id == media_id), None)
+            
+            response_data = {
+                'id': updated_media.id,
+                'nom': updated_media.nom,
+                'url': updated_media.url,
+                'type_site': updated_media.type_site,
+                'facebook_page': updated_media.facebook_page,
+                'twitter_account': updated_media.twitter_account,
+                'actif': updated_media.actif,
+                'derniere_collecte': updated_media.derniere_collecte,
+                'created_at': updated_media.created_at
+            }
+            
+            return Response(response_data)
+        
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def delete(self, request, media_id):
+        """DELETE /api/medias/{id}/ - Supprimer un média"""
+        # Vérifier que le média existe
+        medias = db.get_all_medias(actif_only=False)
+        media = next((m for m in medias if m.id == media_id), None)
+        
+        if not media:
+            return Response(
+                {'error': 'Média non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM medias WHERE id = ?', (media_id,))
+            conn.commit()
+            conn.close()
+            
+            return Response(
+                {'message': 'Média supprimé avec succès'},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # ==================== ARTICLES ====================
@@ -329,6 +490,61 @@ def stats_overview(request):
     }
     
     return Response(stats)
+
+
+# ==================== MODÉRATION ====================
+
+class ModerationStatsView(APIView):
+    """Statistiques de modération"""
+    
+    def get(self, request):
+        """GET /api/moderation/stats/"""
+        stats = db.get_moderation_stats()
+        return Response(stats)
+
+
+class FlaggedContentListView(APIView):
+    """Liste des contenus signalés"""
+    
+    def get(self, request):
+        """GET /api/moderation/flagged/?content_type=article&limit=50"""
+        content_type = request.GET.get('content_type')
+        limit = int(request.GET.get('limit', 50))
+        
+        flagged = db.get_flagged_contents(content_type=content_type, limit=limit)
+        return Response(flagged)
+
+
+class ContentModerationView(APIView):
+    """Détails de modération d'un contenu"""
+    
+    def get(self, request):
+        """GET /api/moderation/content/?type=article&id=123"""
+        content_type = request.GET.get('type')
+        content_id = request.GET.get('id')
+        
+        if not content_type or not content_id:
+            return Response(
+                {'error': 'type et id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            content_id = int(content_id)
+            moderation = db.get_content_moderation(content_type, content_id)
+            
+            if moderation:
+                return Response(moderation)
+            else:
+                return Response(
+                    {'error': 'Contenu non trouvé'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except ValueError:
+            return Response(
+                {'error': 'ID invalide'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 @api_view(['GET'])

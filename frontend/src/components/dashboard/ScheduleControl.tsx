@@ -32,21 +32,26 @@ const ScheduleControl = () => {
       const publicationsPerWeek = Math.round((totalPubs / 90) * 7);
       const expectedPublications = 40;
 
-      // Calculer le score de conformité
-      const dayCompliance = (activeDays / requiredDays) * 100;
+      // CORRECTION: Utiliser jours_depuis_derniere_pub pour déterminer le risque
+      const daysSinceLastPub = media.web?.jours_depuis_derniere_pub || 0;
+
+      // Déterminer le statut basé sur l'inactivité
+      let status = "compliant";
+      if (daysSinceLastPub >= 90) {
+        // Pas de publication depuis 90 jours = fermeture imminente
+        status = "alert";
+      } else if (daysSinceLastPub >= 60) {
+        // Approche des 90 jours = alerte
+        status = "warning";
+      }
+
+      // Calculer le score de conformité basé sur l'inactivité
+      const inactivityScore = Math.max(0, 100 - (daysSinceLastPub / 90) * 100);
       const pubCompliance = Math.min(
         100,
         (publicationsPerWeek / expectedPublications) * 100
       );
-      const complianceScore = Math.round((dayCompliance + pubCompliance) / 2);
-
-      // Déterminer le statut
-      let status = "compliant";
-      if (complianceScore < 70) {
-        status = "alert";
-      } else if (complianceScore < 90) {
-        status = "warning";
-      }
+      const complianceScore = Math.round((inactivityScore + pubCompliance) / 2);
 
       // Formater la dernière publication
       const daysSince = media.web?.jours_depuis_derniere_pub || 0;
@@ -61,6 +66,9 @@ const ScheduleControl = () => {
         lastPub = `Il y a ${Math.floor(daysSince / 7)} semaines`;
       }
 
+      // Calculer les jours restants avant non-conformité
+      const daysRemaining = Math.max(0, 90 - daysSinceLastPub);
+
       return {
         name: media.nom,
         status,
@@ -70,6 +78,8 @@ const ScheduleControl = () => {
         publicationsPerWeek,
         expectedPublications,
         compliance: complianceScore,
+        daysSinceLastPub,
+        daysRemaining,
       };
     });
   }, [audienceData]);
@@ -213,20 +223,30 @@ const ScheduleControl = () => {
                   <div>
                     <div className="flex items-center gap-1 text-muted-foreground mb-1">
                       <Calendar className="h-3 w-3" />
-                      <span>Activité</span>
+                      <span>Inactivité</span>
                     </div>
                     <div className="font-semibold">
-                      {media.activeDays}/{media.requiredDays} jours
+                      {media.daysSinceLastPub} jour
+                      {media.daysSinceLastPub > 1 ? "s" : ""}
                     </div>
                   </div>
 
                   <div>
                     <div className="flex items-center gap-1 text-muted-foreground mb-1">
                       <Activity className="h-3 w-3" />
-                      <span>Publications/sem.</span>
+                      <span>Jours restants</span>
                     </div>
-                    <div className="font-semibold">
-                      {media.publicationsPerWeek}/{media.expectedPublications}
+                    <div
+                      className={`font-semibold ${
+                        media.daysRemaining <= 10
+                          ? "text-destructive"
+                          : media.daysRemaining <= 30
+                          ? "text-warning"
+                          : "text-success"
+                      }`}
+                    >
+                      {media.daysRemaining} jour
+                      {media.daysRemaining > 1 ? "s" : ""}
                     </div>
                   </div>
 
@@ -251,9 +271,9 @@ const ScheduleControl = () => {
                   <div className="pt-2 border-t">
                     <p className="text-sm text-muted-foreground">
                       {media.status === "warning" &&
-                        "⚠️ Activité en baisse. Vérifier la régularité des publications."}
+                        "⚠️ Le média approche des 90 jours sans publication. Surveillance recommandée."}
                       {media.status === "alert" &&
-                        "🚨 Inactivité prolongée détectée. Risque de cessation imminente."}
+                        "🚨 Aucune publication depuis 90 jours ou plus. Risque de fermeture imminente - Intervention CSC requise."}
                     </p>
                   </div>
                 )}
@@ -284,11 +304,12 @@ const ScheduleControl = () => {
                   <div className="flex-1">
                     <h5 className="font-semibold text-sm">{media.name}</h5>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Seulement {media.activeDays} jours d'activité sur 90
-                      requis. Dernière publication : {media.lastPublication}.
+                      Aucune publication depuis 90 jours ou plus. Dernière
+                      publication : {media.lastPublication}.
                     </p>
                     <p className="text-sm font-medium text-destructive mt-2">
-                      Action recommandée : Notification officielle au média
+                      Action recommandée : Mise en demeure pour fermeture ou
+                      reprise d'activité
                     </p>
                   </div>
                 </div>

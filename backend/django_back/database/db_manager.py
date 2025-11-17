@@ -60,7 +60,8 @@ class DatabaseManager:
     
     # ==================== MÉDIAS ====================
     
-    def add_media(self, nom: str, url: str, type_site: str = 'unknown') -> int:
+    def add_media(self, nom: str, url: str, type_site: str = 'unknown', 
+                  facebook_page: str = None, twitter_account: str = None) -> int:
         """
         Ajoute ou met à jour un média
         
@@ -68,6 +69,8 @@ class DatabaseManager:
             nom: Nom du média
             url: URL du site
             type_site: Type de site (wordpress, html, rss)
+            facebook_page: Nom/ID de la page Facebook
+            twitter_account: Nom du compte Twitter (sans @)
             
         Returns:
             ID du média
@@ -77,12 +80,14 @@ class DatabaseManager:
         
         try:
             cursor.execute("""
-                INSERT INTO medias (nom, url, type_site)
-                VALUES (?, ?, ?)
+                INSERT INTO medias (nom, url, type_site, facebook_page, twitter_account)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(url) DO UPDATE SET
                     nom = excluded.nom,
-                    type_site = excluded.type_site
-            """, (nom, url, type_site))
+                    type_site = excluded.type_site,
+                    facebook_page = excluded.facebook_page,
+                    twitter_account = excluded.twitter_account
+            """, (nom, url, type_site, facebook_page, twitter_account))
             
             media_id = cursor.lastrowid
             
@@ -112,6 +117,8 @@ class DatabaseManager:
                     nom=row['nom'],
                     url=row['url'],
                     type_site=row['type_site'],
+                    facebook_page=row['facebook_page'],
+                    twitter_account=row['twitter_account'],
                     actif=bool(row['actif']),
                     derniere_collecte=row['derniere_collecte'],
                     created_at=row['created_at']
@@ -139,6 +146,8 @@ class DatabaseManager:
                     nom=row['nom'],
                     url=row['url'],
                     type_site=row['type_site'],
+                    facebook_page=row['facebook_page'],
+                    twitter_account=row['twitter_account'],
                     actif=bool(row['actif']),
                     derniere_collecte=row['derniere_collecte'],
                     created_at=row['created_at']
@@ -161,6 +170,102 @@ class DatabaseManager:
                 WHERE id = ?
             """, (media_id,))
             conn.commit()
+        
+        finally:
+            conn.close()
+    
+    def get_medias_with_facebook(self, actif_only: bool = True) -> List[Media]:
+        """Récupérer tous les médias ayant une page Facebook configurée"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = "SELECT * FROM medias WHERE facebook_page IS NOT NULL AND facebook_page != ''"
+            if actif_only:
+                query += " AND actif = 1"
+            query += " ORDER BY nom"
+            
+            cursor.execute(query)
+            
+            medias = []
+            for row in cursor.fetchall():
+                medias.append(Media(
+                    id=row['id'],
+                    nom=row['nom'],
+                    url=row['url'],
+                    type_site=row['type_site'],
+                    facebook_page=row['facebook_page'],
+                    twitter_account=row['twitter_account'],
+                    actif=bool(row['actif']),
+                    derniere_collecte=row['derniere_collecte'],
+                    created_at=row['created_at']
+                ))
+            
+            return medias
+        
+        finally:
+            conn.close()
+    
+    def get_medias_with_twitter(self, actif_only: bool = True) -> List[Media]:
+        """Récupérer tous les médias ayant un compte Twitter configuré"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = "SELECT * FROM medias WHERE twitter_account IS NOT NULL AND twitter_account != ''"
+            if actif_only:
+                query += " AND actif = 1"
+            query += " ORDER BY nom"
+            
+            cursor.execute(query)
+            
+            medias = []
+            for row in cursor.fetchall():
+                medias.append(Media(
+                    id=row['id'],
+                    nom=row['nom'],
+                    url=row['url'],
+                    type_site=row['type_site'],
+                    facebook_page=row['facebook_page'],
+                    twitter_account=row['twitter_account'],
+                    actif=bool(row['actif']),
+                    derniere_collecte=row['derniere_collecte'],
+                    created_at=row['created_at']
+                ))
+            
+            return medias
+        
+        finally:
+            conn.close()
+    
+    def get_medias_for_web_scraping(self, actif_only: bool = True) -> List[Media]:
+        """Récupérer tous les médias pour le scraping web (ayant une URL valide)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = "SELECT * FROM medias WHERE url IS NOT NULL AND url != ''"
+            if actif_only:
+                query += " AND actif = 1"
+            query += " ORDER BY nom"
+            
+            cursor.execute(query)
+            
+            medias = []
+            for row in cursor.fetchall():
+                medias.append(Media(
+                    id=row['id'],
+                    nom=row['nom'],
+                    url=row['url'],
+                    type_site=row['type_site'],
+                    facebook_page=row['facebook_page'],
+                    twitter_account=row['twitter_account'],
+                    actif=bool(row['actif']),
+                    derniere_collecte=row['derniere_collecte'],
+                    created_at=row['created_at']
+                ))
+            
+            return medias
         
         finally:
             conn.close()
@@ -227,6 +332,26 @@ class DatabaseManager:
             if row:
                 return self._row_to_article(row)
             return None
+        
+        finally:
+            conn.close()
+    
+    def article_exists(self, url: str) -> bool:
+        """
+        Vérifier si un article existe déjà en base de données
+        
+        Args:
+            url: URL de l'article
+            
+        Returns:
+            True si l'article existe, False sinon
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT 1 FROM articles WHERE url = ? LIMIT 1", (url,))
+            return cursor.fetchone() is not None
         
         finally:
             conn.close()
@@ -854,8 +979,10 @@ class DatabaseManager:
                     suspicious_elements, misinformation_reason,
                     is_sensitive, sensitivity_level, sensitivity_score,
                     sensitive_categories, sensitivity_reason,
+                    toxicity_details, misinformation_details, sensitivity_details,
+                    primary_issue,
                     analyzed_at, model_used
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 content_type, content_id,
                 analysis.get('risk_score', 0),
@@ -881,8 +1008,12 @@ class DatabaseManager:
                 sensitivity.get('score_sensibilite', 0),
                 json.dumps(sensitivity.get('categories_sensibles', [])),
                 sensitivity.get('raison', ''),
+                json.dumps(toxicity),
+                json.dumps(misinformation),
+                json.dumps(sensitivity),
+                analysis.get('primary_issue', 'none'),
                 analysis.get('analyzed_at'),
-                'llama3.2'
+                'mistral:latest'
             ))
             
             conn.commit()
@@ -966,6 +1097,17 @@ class DatabaseManager:
             
             results = []
             for row in cursor.fetchall():
+                # Parser les détails JSON
+                toxicity_details = json.loads(row['toxicity_details']) if row['toxicity_details'] else {}
+                misinformation_details = json.loads(row['misinformation_details']) if row['misinformation_details'] else {}
+                sensitivity_details = json.loads(row['sensitivity_details']) if row['sensitivity_details'] else {}
+                
+                # Utiliser le primary_issue de la base de données (décidé par l'IA)
+                try:
+                    primary_issue = row['primary_issue'] if row['primary_issue'] else 'none'
+                except (KeyError, IndexError):
+                    primary_issue = 'none'
+                
                 results.append({
                     'id': row['id'],
                     'content_type': row['content_type'],
@@ -975,7 +1117,11 @@ class DatabaseManager:
                     'is_toxic': bool(row['is_toxic']),
                     'is_misinformation': bool(row['is_misinformation']),
                     'is_sensitive': bool(row['is_sensitive']),
-                    'analyzed_at': row['analyzed_at']
+                    'analyzed_at': row['analyzed_at'],
+                    'toxicity_details': toxicity_details,
+                    'misinformation_details': misinformation_details,
+                    'sensitivity_details': sensitivity_details,
+                    'primary_issue': primary_issue
                 })
             
             return results
@@ -1015,6 +1161,179 @@ class DatabaseManager:
                 'avg_risk_score': round(row['avg_risk_score'] or 0, 2)
             }
             
+        finally:
+            conn.close()
+    
+    # ==================== STATISTIQUES ====================
+    
+    def get_scraping_stats(self) -> dict:
+        """
+        Récupère les statistiques de scraping
+        
+        Returns:
+            Dict avec les statistiques
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Total articles
+            cursor.execute("SELECT COUNT(*) as total FROM articles")
+            total_articles = cursor.fetchone()['total']
+            
+            # Articles par média
+            cursor.execute("""
+                SELECT m.nom, COUNT(a.id) as count
+                FROM medias m
+                LEFT JOIN articles a ON m.id = a.media_id
+                GROUP BY m.id, m.nom
+                ORDER BY count DESC
+            """)
+            articles_par_media = {row['nom']: row['count'] for row in cursor.fetchall()}
+            
+            # Articles par source
+            cursor.execute("""
+                SELECT source_type, COUNT(*) as count
+                FROM articles
+                GROUP BY source_type
+                ORDER BY count DESC
+            """)
+            articles_par_source = {row['source_type']: row['count'] for row in cursor.fetchall()}
+            
+            # Derniers logs
+            cursor.execute("""
+                SELECT 
+                    m.nom as media_nom,
+                    sl.status,
+                    sl.methode,
+                    sl.articles_collectes,
+                    sl.message,
+                    sl.created_at
+                FROM scraping_logs sl
+                JOIN medias m ON sl.media_id = m.id
+                ORDER BY sl.created_at DESC
+                LIMIT 10
+            """)
+            derniers_logs = [dict(row) for row in cursor.fetchall()]
+            
+            return {
+                'total_articles': total_articles,
+                'articles_par_media': articles_par_media,
+                'articles_par_source': articles_par_source,
+                'derniers_logs': derniers_logs
+            }
+            
+        finally:
+            conn.close()
+    
+    def get_unclassified_articles(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Récupère les articles non classifiés
+        
+        Args:
+            limit: Nombre maximum d'articles à retourner
+            
+        Returns:
+            Liste de dictionnaires contenant les articles
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT a.id, a.titre, a.contenu, a.date_publication
+                FROM articles a
+                LEFT JOIN classifications c ON a.id = c.article_id
+                WHERE c.id IS NULL
+                ORDER BY a.date_publication DESC
+                LIMIT ?
+            """, (limit,))
+            
+            return [dict(row) for row in cursor.fetchall()]
+        
+        finally:
+            conn.close()
+    
+    def get_article(self, article_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Récupère un article par son ID
+        
+        Args:
+            article_id: ID de l'article
+            
+        Returns:
+            Dictionnaire contenant l'article ou None
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT id, media_id, titre, contenu, url, date_publication, source
+                FROM articles
+                WHERE id = ?
+            """, (article_id,))
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        
+        finally:
+            conn.close()
+    
+    def get_classification_stats(self) -> Dict[str, Any]:
+        """
+        Récupère les statistiques de classification
+        
+        Returns:
+            Dictionnaire avec les statistiques
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Total articles
+            cursor.execute("SELECT COUNT(*) as total FROM articles")
+            total_articles = cursor.fetchone()['total']
+            
+            # Articles classifiés
+            cursor.execute("""
+                SELECT COUNT(DISTINCT article_id) as total 
+                FROM classifications
+            """)
+            total_classifies = cursor.fetchone()['total']
+            
+            # Par catégorie
+            cursor.execute("""
+                SELECT categorie, COUNT(*) as total, AVG(confiance) as confiance
+                FROM classifications
+                GROUP BY categorie
+                ORDER BY total DESC
+            """)
+            par_categorie = {}
+            confiance_par_categorie = {}
+            for row in cursor.fetchall():
+                par_categorie[row['categorie']] = row['total']
+                confiance_par_categorie[row['categorie']] = round(row['confiance'], 2)
+            
+            # Par méthode
+            cursor.execute("""
+                SELECT methode, COUNT(*) as total
+                FROM classifications
+                GROUP BY methode
+            """)
+            par_methode = {row['methode']: row['total'] for row in cursor.fetchall()}
+            
+            pourcentage = round((total_classifies / total_articles * 100), 1) if total_articles > 0 else 0
+            
+            return {
+                'total_articles': total_articles,
+                'total_classifies': total_classifies,
+                'pourcentage_classifies': pourcentage,
+                'par_categorie': par_categorie,
+                'confiance_par_categorie': confiance_par_categorie,
+                'par_methode': par_methode
+            }
+        
         finally:
             conn.close()
     

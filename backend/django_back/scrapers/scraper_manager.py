@@ -224,57 +224,50 @@ class ScraperManager:
         if errors > 0:
             print(f"   ⚠️ {errors} erreurs")
     
-    def scrape_all_sites(self, sites_file: str = 'sites.txt', days: int = 30) -> dict:
+    def scrape_all_sites(self, sites_file: str = None, days: int = 30) -> dict:
         """
-        Scraper tous les sites listés dans un fichier
+        Scraper tous les sites depuis la table media (ou fichier en fallback)
         
         Args:
-            sites_file: Chemin vers le fichier contenant les URLs
+            sites_file: [DEPRECATED] Chemin vers le fichier contenant les URLs (pour compatibilité)
             days: Nombre de jours à récupérer
         
         Returns:
             Dictionnaire avec les statistiques
         """
         print("\n" + "="*60)
-        print("🚀 MÉDIA-SCAN - Collecte Multi-Sites")
+        print("🚀 MÉDIA-SCAN - Collecte Multi-Sites (depuis table media)")
         print("="*60)
         
-        # Lire le fichier des sites
-        try:
-            with open(sites_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            print(f"❌ Fichier {sites_file} non trouvé")
+        # Récupérer les médias depuis la base de données
+        medias = self.db.get_medias_for_web_scraping(actif_only=True)
+        
+        if not medias:
+            print("⚠️ Aucun média trouvé dans la table media")
             return {}
         
-        # Filtrer les lignes (ignorer commentaires et lignes vides)
-        urls = []
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith('#'):
-                urls.append(line)
-        
-        print(f"\n📋 {len(urls)} sites à scraper")
+        print(f"\n📋 {len(medias)} sites à scraper")
         print(f"📅 Période: {days} derniers jours\n")
         
         # Statistiques
         stats = {
-            'total_sites': len(urls),
+            'total_sites': len(medias),
             'success': 0,
             'errors': 0,
             'total_articles': 0,
             'by_method': {
                 'html_scraping': 0,
+                'rss_feed': 0,
                 'error': 0
             },
             'details': []
         }
         
         # Scraper chaque site
-        for i, url in enumerate(urls, 1):
-            print(f"\n[{i}/{len(urls)}] Traitement de {url}...")
+        for i, media in enumerate(medias, 1):
+            print(f"\n[{i}/{len(medias)}] Traitement de {media.nom} ({media.url})...")
             
-            count, method, message = self.scrape_site(url, days=days)
+            count, method, message = self.scrape_site(media.url, days=days)
             
             if count > 0:
                 stats['success'] += 1
@@ -285,7 +278,9 @@ class ScraperManager:
             stats['by_method'][method] = stats['by_method'].get(method, 0) + count
             
             stats['details'].append({
-                'url': url,
+                'media_id': media.id,
+                'nom': media.nom,
+                'url': media.url,
                 'articles': count,
                 'method': method,
                 'message': message
