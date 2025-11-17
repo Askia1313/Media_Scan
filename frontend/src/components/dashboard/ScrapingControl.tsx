@@ -116,11 +116,8 @@ const ScrapingControl = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Play className="h-5 w-5" />
-            Lancer un scraping manuel
+            Lancer la collecte des données
           </CardTitle>
-          <CardDescription>
-            Choisissez le type de scraping à exécuter immédiatement
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1  gap-4">

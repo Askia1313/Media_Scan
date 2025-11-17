@@ -26,6 +26,7 @@ import ScheduleControl from "@/components/dashboard/ScheduleControl";
 import MediaManagement from "@/components/dashboard/MediaManagement";
 import { toast } from "@/hooks/use-toast";
 import ScrapingControl from "@/components/dashboard/ScrapingControl";
+import ReportDialog from "@/components/dashboard/ReportDialog";
 
 /*import { testApi } from "@/services/test-api";
 
@@ -33,19 +34,12 @@ testApi();*/
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("scraping");
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportFormat, setReportFormat] = useState<"pdf" | "excel">("pdf");
 
   const handleExport = (format: "pdf" | "excel") => {
-    toast({
-      title: "Export en cours",
-      description: `Génération du rapport ${format.toUpperCase()}...`,
-    });
-    // Simulation de l'export
-    setTimeout(() => {
-      toast({
-        title: "Export réussi",
-        description: `Le rapport a été téléchargé au format ${format.toUpperCase()}.`,
-      });
-    }, 2000);
+    setReportFormat(format);
+    setReportDialogOpen(true);
   };
 
   return (
@@ -156,6 +150,13 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Dialogue de génération de rapports */}
+      <ReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        format={reportFormat}
+      />
     </div>
   );
 };
