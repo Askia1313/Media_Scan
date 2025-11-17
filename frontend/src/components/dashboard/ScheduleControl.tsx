@@ -208,16 +208,8 @@ const ScheduleControl = () => {
                     <h4 className="font-semibold">{media.name}</h4>
                     {getStatusBadge(media.status)}
                   </div>
-                  <div
-                    className={`text-2xl font-bold ${getComplianceColor(
-                      media.compliance
-                    )}`}
-                  >
-                    {media.compliance}%
-                  </div>
                 </div>
 
-                <Progress value={media.compliance} className="h-2" />
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 text-sm">
                   <div>
