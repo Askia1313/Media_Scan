@@ -492,19 +492,21 @@ class ScrapingTriggerView(APIView):
                 cmd.append('--skip-twitter')
             
             # Exécuter le scraping
-            print(f"🚀 Commande de scraping: {' '.join(cmd)}")
+            print(f"[SCRAPING] Commande: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',  # Remplacer les caractères invalides
                 timeout=300  # 5 minutes max
             )
             
-            print(f"📊 Return code: {result.returncode}")
+            print(f"[SCRAPING] Return code: {result.returncode}")
             if result.stdout:
-                print(f"✅ STDOUT: {result.stdout[:500]}")
+                print(f"[SCRAPING] STDOUT: {result.stdout[:500]}")
             if result.stderr:
-                print(f"❌ STDERR: {result.stderr[:500]}")
+                print(f"[SCRAPING] STDERR: {result.stderr[:500]}")
             
             if result.returncode == 0:
                 # Compter les résultats
