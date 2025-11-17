@@ -1329,7 +1329,7 @@ class DatabaseManager:
         
         try:
             cursor.execute("""
-                SELECT id, media_id, titre, contenu, url, date_publication, source
+                SELECT id, media_id, titre, contenu, url, date_publication, source_type
                 FROM articles
                 WHERE id = ?
             """, (article_id,))
