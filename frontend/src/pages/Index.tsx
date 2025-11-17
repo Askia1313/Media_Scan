@@ -1,8 +1,23 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { BarChart3, FileDown, TrendingUp, AlertTriangle, Radio, FileText, Settings } from "lucide-react";
+import {
+  BarChart3,
+  FileDown,
+  TrendingUp,
+  AlertTriangle,
+  Radio,
+  FileText,
+  Settings,
+  Play,
+} from "lucide-react";
 import DashboardOverview from "@/components/dashboard/DashboardOverview";
 import MediaRanking from "@/components/dashboard/MediaRanking";
 import ThematicAnalysis from "@/components/dashboard/ThematicAnalysis";
@@ -10,6 +25,7 @@ import SensitiveContent from "@/components/dashboard/SensitiveContent";
 import ScheduleControl from "@/components/dashboard/ScheduleControl";
 import MediaManagement from "@/components/dashboard/MediaManagement";
 import { toast } from "@/hooks/use-toast";
+import ScrapingControl from "@/components/dashboard/ScrapingControl";
 
 /*import { testApi } from "@/services/test-api";
 
@@ -18,7 +34,7 @@ testApi();*/
 const Index = () => {
   const [activeTab, setActiveTab] = useState("overview");
 
-  const handleExport = (format: 'pdf' | 'excel') => {
+  const handleExport = (format: "pdf" | "excel") => {
     toast({
       title: "Export en cours",
       description: `Génération du rapport ${format.toUpperCase()}...`,
@@ -43,23 +59,27 @@ const Index = () => {
                 <Radio className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">CSC Média Monitor</h1>
-                <p className="text-sm text-muted-foreground">Plateforme de surveillance des médias</p>
+                <h1 className="text-2xl font-bold text-foreground">
+                  CSC Média Monitor
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Plateforme de surveillance des médias
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
-                onClick={() => handleExport('excel')}
+                onClick={() => handleExport("excel")}
               >
                 <FileDown className="h-4 w-4 mr-2" />
                 Excel
               </Button>
-              <Button 
-                variant="default" 
+              <Button
+                variant="default"
                 size="sm"
-                onClick={() => handleExport('pdf')}
+                onClick={() => handleExport("pdf")}
               >
                 <FileText className="h-4 w-4 mr-2" />
                 PDF
@@ -71,8 +91,12 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-6"
+        >
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
             <TabsTrigger value="overview" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Vue d'ensemble</span>
@@ -96,6 +120,10 @@ const Index = () => {
             <TabsTrigger value="media" className="gap-2">
               <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Médias</span>
+            </TabsTrigger>
+            <TabsTrigger value="scraping" className="gap-2">
+              <Play className="h-4 w-4" />
+              <span className="hidden sm:inline">Scraping</span>
             </TabsTrigger>
           </TabsList>
 
@@ -121,6 +149,10 @@ const Index = () => {
 
           <TabsContent value="media" className="space-y-6">
             <MediaManagement />
+          </TabsContent>
+
+          <TabsContent value="scraping" className="space-y-6">
+            <ScrapingControl />
           </TabsContent>
         </Tabs>
       </main>

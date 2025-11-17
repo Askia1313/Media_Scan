@@ -126,6 +126,13 @@ const MediaManagement = () => {
         });
 
         setEditingMediaId(null);
+        form.reset({
+          name: "",
+          url: "",
+          type_site: "unknown",
+          facebook_page: "",
+          twitter_account: "",
+        });
       } else {
         // Mode création
         await createMediaMutation.mutateAsync({
@@ -141,9 +148,15 @@ const MediaManagement = () => {
           title: "✅ Média ajouté",
           description: `${data.name} a été ajouté avec succès.`,
         });
-      }
 
-      form.reset();
+        form.reset({
+          name: "",
+          url: "",
+          type_site: "unknown",
+          facebook_page: "",
+          twitter_account: "",
+        });
+      }
     } catch (error) {
       toast({
         title: "❌ Erreur",
